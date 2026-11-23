@@ -1,0 +1,9 @@
+{
+  "id": "task_001_cpp_refactor",
+  "description": "Refactor a monolithic C++ class into a more modular design using the Strategy pattern.",
+  "repo_path": "bench/repos/cpp_refactor",
+  "verify_command": "bash bench/tasks/verify_001.sh",
+  "client_config": {
+    "prompt_prefix": "You are an expert C++ developer. Refactor the following code..."
+  }
+}

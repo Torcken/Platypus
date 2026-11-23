@@ -1,0 +1,9 @@
+{
+  "id": "task_002_python_data_proc",
+  "description": "Optimize a Python script that processes a large CSV file using pandas and multiprocessing.",
+  "repo_path": "bench/repos/python_data_proc",
+  "verify_command": "bash bench/tasks/verify_002.sh",
+  "client_config": {
+    "prompt_prefix": "You are a Python performance expert. Optimize this script..."
+  }
+}

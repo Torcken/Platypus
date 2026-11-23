@@ -1,0 +1,2 @@
+/usr/bin/ar qc libllm.a CMakeFiles/llm.dir/chat_formatter.cpp.o CMakeFiles/llm.dir/fake_backend.cpp.o CMakeFiles/llm.dir/llama_server_backend.cpp.o CMakeFiles/llm.dir/llm_backend_factory.cpp.o CMakeFiles/llm.dir/model_profile.cpp.o
+/usr/bin/ranlib libllm.a

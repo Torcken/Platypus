@@ -1,0 +1,22 @@
+# Generated build and dependency outputs
+/build/
+/out/
+/.cache/
+
+# Local benchmark inputs and outputs: may contain source code, prompts, or model responses
+/bench/.cache/
+/bench/results/
+/bench/recordings/
+
+# Per-project state and local secrets
+/.platypus/
+/.env
+/.env.*
+!.env.example
+
+# Editor and Python artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.idea/
+.vscode/

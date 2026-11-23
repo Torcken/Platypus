@@ -1,0 +1,2 @@
+/usr/bin/ar qc libcore.a CMakeFiles/core.dir/codec.cpp.o CMakeFiles/core.dir/tools.cpp.o CMakeFiles/core.dir/context_manager.cpp.o CMakeFiles/core.dir/execution_engine.cpp.o
+/usr/bin/ranlib libcore.a

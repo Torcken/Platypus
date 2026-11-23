@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/e2e_tests.dir/link.d CMakeFiles/e2e_tests.dir/src/tests/e2e/e2e_tests.cpp.o -o e2e_tests  src/core/libcore.a src/llm/libllm.a src/util/libutil.a

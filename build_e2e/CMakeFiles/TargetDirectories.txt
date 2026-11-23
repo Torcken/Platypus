@@ -1,0 +1,13 @@
+/home/torcken/dev/Projects/OpenSource/platypus/build_e2e/CMakeFiles/context_manager_test.dir
+/home/torcken/dev/Projects/OpenSource/platypus/build_e2e/CMakeFiles/e2e_tests.dir
+/home/torcken/dev/Projects/OpenSource/platypus/build_e2e/CMakeFiles/edit_cache.dir
+/home/torcken/dev/Projects/OpenSource/platypus/build_e2e/CMakeFiles/rebuild_cache.dir
+/home/torcken/dev/Projects/OpenSource/platypus/build_e2e/src/util/CMakeFiles/util.dir
+/home/torcken/dev/Projects/OpenSource/platypus/build_e2e/src/util/CMakeFiles/edit_cache.dir
+/home/torcken/dev/Projects/OpenSource/platypus/build_e2e/src/util/CMakeFiles/rebuild_cache.dir
+/home/torcken/dev/Projects/OpenSource/platypus/build_e2e/src/llm/CMakeFiles/llm.dir
+/home/torcken/dev/Projects/OpenSource/platypus/build_e2e/src/llm/CMakeFiles/edit_cache.dir
+/home/torcken/dev/Projects/OpenSource/platypus/build_e2e/src/llm/CMakeFiles/rebuild_cache.dir
+/home/torcken/dev/Projects/OpenSource/platypus/build_e2e/src/core/CMakeFiles/core.dir
+/home/torcken/dev/Projects/OpenSource/platypus/build_e2e/src/core/CMakeFiles/edit_cache.dir
+/home/torcken/dev/Projects/OpenSource/platypus/build_e2e/src/core/CMakeFiles/rebuild_cache.dir

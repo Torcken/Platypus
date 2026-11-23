@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/context_manager_test.dir/link.d CMakeFiles/context_manager_test.dir/src/tests/context_manager_test.cpp.o -o context_manager_test  src/core/libcore.a src/llm/libllm.a src/util/libutil.a

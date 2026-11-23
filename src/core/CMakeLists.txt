@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 3.20)
+project(platypus_core)
+
+add_library(core STATIC
+    codec.cpp
+    tools.cpp
+    context_manager.cpp
+    execution_engine.cpp
+)
+
+target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

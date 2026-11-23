@@ -1,0 +1,12 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/context_manager_test.dir/link.d"
+  "CMakeFiles/context_manager_test.dir/src/tests/context_manager_test.cpp.o"
+  "CMakeFiles/context_manager_test.dir/src/tests/context_manager_test.cpp.o.d"
+  "context_manager_test"
+  "context_manager_test.pdb"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/context_manager_test.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()
