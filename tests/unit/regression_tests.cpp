@@ -67,12 +67,14 @@ TEST_CASE("Project plans round trip with stable task IDs and completion states")
     core::PlanStore plans(workspace.root);
     core::ProjectPlan plan{
         {"Foundation",
-         {{"TASK-0001", "Add the parser", true}, {"TASK-0002", "Add parser tests", false}}}};
+         {{"TASK-0001", "Add the parser", true}, {"TASK-0002", "Add parser tests", false}},
+         std::string(40, 'a')}};
     REQUIRE(plans.save(plan).is_ok());
     auto loaded = plans.load();
     REQUIRE(loaded.is_ok());
     REQUIRE(loaded.value().size() == 1);
     REQUIRE(loaded.value()[0].title == "Foundation");
+    REQUIRE(loaded.value()[0].baseline_snapshot == std::string(40, 'a'));
     REQUIRE(loaded.value()[0].tasks[0].complete);
     REQUIRE(loaded.value()[0].tasks[1].id == "TASK-0002");
     auto rendered = core::PlanStore::render(loaded.value());
@@ -84,6 +86,9 @@ TEST_CASE("Project plans round trip with stable task IDs and completion states")
 TEST_CASE("Plan parser rejects malformed and duplicate tasks") {
     REQUIRE_FALSE(core::PlanStore::parse("# Other Plan\n").is_ok());
     REQUIRE_FALSE(
+        core::PlanStore::parse("# Platypus Plan\n\n## Milestone: First\n<!-- baseline: bad -->\n")
+            .is_ok());
+    REQUIRE_FALSE(
         core::PlanStore::parse("# Platypus Plan\n\n## Milestone: First\n- [ ] TASK-0001: One\n"
                                "- [x] TASK-0001: Duplicate\n")
             .is_ok());
@@ -94,7 +99,7 @@ TEST_CASE("Plan parser rejects malformed and duplicate tasks") {
 TEST_CASE("Imported plans merge as new unchecked tasks with fresh IDs") {
     Workspace workspace;
     core::PlanStore plans(workspace.root);
-    REQUIRE(plans.save({{"Existing", {{"TASK-0001", "Keep this task", true}}}}).is_ok());
+    REQUIRE(plans.save({{"Existing", {{"TASK-0001", "Keep this task", true}}, {}}}).is_ok());
     const std::string imported =
         "# Platypus Plan\n\n## Milestone: External work\n- [x] TASK-0001: Imported one\n"
         "- [ ] TASK-0002: Imported two\n";
@@ -155,6 +160,12 @@ TEST_CASE("Interactive plan commands validate and confirm plan mutations") {
             std::string::npos);
     REQUIRE(core::handle_plan_command("/task 1 Add tests", store)->find("TASK-0001") !=
             std::string::npos);
+    std::ofstream(workspace.root / "implementation.cpp") << "int implementation = 1;\n";
+    auto review = core::handle_plan_command("/review", store);
+    REQUIRE(review.has_value());
+    REQUIRE(review->find("Milestone Review: Implement") != std::string::npos);
+    REQUIRE(review->find("implementation.cpp") != std::string::npos);
+    REQUIRE(review->find("No automatic project checks") != std::string::npos);
     REQUIRE(core::handle_plan_command("/done TASK-0001", store)->find("Completed") !=
             std::string::npos);
     REQUIRE(approvals == 3);
@@ -169,7 +180,7 @@ TEST_CASE("Plan storage rejects symlink destinations") {
     fs::create_symlink(outside.root / "PLAN.md", workspace.root / "PLAN.md");
     core::PlanStore plans(workspace.root);
     REQUIRE_FALSE(plans.load().is_ok());
-    REQUIRE_FALSE(plans.save({{"Unsafe", {{"TASK-0001", "Do not overwrite", false}}}}).is_ok());
+    REQUIRE_FALSE(plans.save({{"Unsafe", {{"TASK-0001", "Do not overwrite", false}}, {}}}).is_ok());
     REQUIRE(read(outside.root / "PLAN.md") == "outside data");
 }
 TEST_CASE("Workspace escape and symlink targets are rejected") {

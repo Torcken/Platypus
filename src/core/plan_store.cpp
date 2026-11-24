@@ -33,6 +33,14 @@ bool valid_task_id(const std::string &id) {
     return true;
 }
 
+bool valid_snapshot_id(const std::string &id) {
+    return (id.size() == 40 || id.size() == 64) &&
+           std::all_of(id.begin(), id.end(), [](char character) {
+               return (character >= '0' && character <= '9') ||
+                      (character >= 'a' && character <= 'f');
+           });
+}
+
 util::Result<std::size_t> next_task_number(const ProjectPlan &plan) {
     std::size_t next = 1;
     for (const auto &milestone : plan)
@@ -72,13 +80,21 @@ util::Result<ProjectPlan> PlanStore::parse(std::string_view markdown) try {
         if (line.empty())
             continue;
         constexpr std::string_view milestone_prefix = "## Milestone: ";
+        constexpr std::string_view baseline_prefix = "<!-- baseline: ";
         constexpr std::string_view open_task_prefix = "- [ ] ";
         constexpr std::string_view done_task_prefix = "- [x] ";
         if (line.starts_with(milestone_prefix)) {
             auto title = line.substr(milestone_prefix.size());
             if (!valid_text(title) || plan.size() >= kMaxMilestones)
                 return Return::fail("Invalid milestone title or too many milestones");
-            plan.push_back({std::move(title), {}});
+            plan.push_back({std::move(title), {}, {}});
+            continue;
+        }
+        if (line.starts_with(baseline_prefix) && line.ends_with(" -->")) {
+            auto id = line.substr(baseline_prefix.size(), line.size() - baseline_prefix.size() - 4);
+            if (plan.empty() || !plan.back().baseline_snapshot.empty() || !valid_snapshot_id(id))
+                return Return::fail("Invalid milestone review baseline");
+            plan.back().baseline_snapshot = std::move(id);
             continue;
         }
         bool complete = false;
@@ -119,6 +135,11 @@ util::Result<std::string> PlanStore::render(const ProjectPlan &plan) try {
         if (!valid_text(milestone.title))
             return Return::fail("Invalid milestone title");
         output << "## Milestone: " << milestone.title << "\n";
+        if (!milestone.baseline_snapshot.empty()) {
+            if (!valid_snapshot_id(milestone.baseline_snapshot))
+                return Return::fail("Invalid milestone review baseline");
+            output << "<!-- baseline: " << milestone.baseline_snapshot << " -->\n";
+        }
         for (const auto &task : milestone.tasks) {
             if (!valid_task_id(task.id) || !valid_text(task.description) ||
                 !ids.insert(task.id).second || ++task_count > kMaxTasks)
@@ -242,10 +263,25 @@ util::Result<util::Void> PlanStore::add_milestone(std::string title) const try {
     if (!plan.is_ok())
         return Return::fail(plan.error());
     auto updated = plan.value();
-    updated.push_back({std::move(title), {}});
+    updated.push_back({std::move(title), {}, {}});
     return save(updated);
 } catch (const std::exception &error) {
     return util::Result<util::Void>::fail("Cannot add milestone: " + std::string(error.what()));
+}
+
+util::Result<util::Void> PlanStore::set_milestone_baseline(std::size_t milestone_index,
+                                                           const std::string &snapshot_id) const {
+    using Return = util::Result<util::Void>;
+    if (!valid_snapshot_id(snapshot_id))
+        return Return::fail("Invalid milestone review baseline ID");
+    auto plan = load();
+    if (!plan.is_ok())
+        return Return::fail(plan.error());
+    auto updated = plan.value();
+    if (milestone_index >= updated.size())
+        return Return::fail("Milestone index is outside the plan");
+    updated[milestone_index].baseline_snapshot = snapshot_id;
+    return save(updated);
 }
 
 util::Result<std::string> PlanStore::add_task(std::size_t milestone_index,
@@ -350,7 +386,7 @@ util::Result<util::Void> PlanStore::merge_import(std::string_view markdown) cons
         return Return::fail(next.error());
     auto next_id = next.value();
     for (const auto &source_milestone : imported.value()) {
-        PlanMilestone milestone{source_milestone.title, {}};
+        PlanMilestone milestone{source_milestone.title, {}, {}};
         for (const auto &source_task : source_milestone.tasks) {
             milestone.tasks.push_back({task_id(next_id++), source_task.description, false});
         }

@@ -28,8 +28,8 @@ class SnapshotStore {
     Result<bool> restore(const SnapshotId &id);
     /// List captured snapshots, newest first. An unused store returns an empty list without writes.
     Result<std::vector<SnapshotId>> list() const;
-    /// Produces the diff from the latest snapshot to current files.
-    Result<std::string> generate_diff(const std::string &unused = "");
+    /// Produces the diff from a known snapshot to current files; defaults to the latest snapshot.
+    Result<std::string> generate_diff(const std::string &base_snapshot = "");
     /// Previews and restores the most recent pre-mutation snapshot after confirmation.
     Result<bool> rollback(const std::string &unused = "");
     /// Shows a proposed file diff, asks permission, snapshots, then atomically replaces the file.

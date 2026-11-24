@@ -267,12 +267,21 @@ Result<std::vector<SnapshotId>> SnapshotStore::list() const try {
 } catch (const std::exception &error) {
     return Result<std::vector<SnapshotId>>::fail(error.what());
 }
-Result<std::string> SnapshotStore::generate_diff(const std::string &) {
+Result<std::string> SnapshotStore::generate_diff(const std::string &base_snapshot) {
+    auto base = base_snapshot;
+    if (!base.empty()) {
+        auto known = list();
+        if (!known.is_ok())
+            return Result<std::string>::fail(known.error());
+        if (std::find(known.value().begin(), known.value().end(), base) == known.value().end())
+            return Result<std::string>::fail("Unknown review snapshot ID");
+    } else
+        base = "HEAD";
     auto staged =
         git({"add", "--all", "--force", "--", ".", ":(exclude).git", ":(exclude).platypus"});
     if (!staged.is_ok())
         return Result<std::string>::fail(staged.error());
-    return git({"diff", "--cached", "--no-ext-diff", "--no-textconv", "HEAD", "--", ".",
+    return git({"diff", "--cached", "--no-ext-diff", "--no-textconv", base, "--", ".",
                 ":(exclude).platypus", ":(exclude).git"});
 }
 Result<std::string> SnapshotStore::write(const std::string &path, const std::string &content) {

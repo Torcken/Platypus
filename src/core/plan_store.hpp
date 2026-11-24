@@ -19,6 +19,7 @@ struct PlanTask {
 struct PlanMilestone {
     std::string title;
     std::vector<PlanTask> tasks;
+    std::string baseline_snapshot;
 };
 
 using ProjectPlan = std::vector<PlanMilestone>;
@@ -31,6 +32,8 @@ class PlanStore {
     util::Result<ProjectPlan> load() const;
     util::Result<util::Void> save(const ProjectPlan &plan) const;
     util::Result<util::Void> add_milestone(std::string title) const;
+    util::Result<util::Void> set_milestone_baseline(std::size_t milestone_index,
+                                                    const std::string &snapshot_id) const;
     util::Result<std::string> add_task(std::size_t milestone_index, std::string description) const;
     util::Result<util::Void> set_task_complete(const std::string &task_id, bool complete) const;
     /// Append an imported plan, assigning fresh task IDs before writing it.

@@ -40,9 +40,11 @@ The shell is not a sandbox. Source-derived profiles still require real-model com
 Set `PLATYPUS_DEBUG_PREFIX=1` to log when the rendered system prefix changes between generations.
 
 The interactive plan commands manage a validated, project-local `PLAN.md`: `/plan` shows it,
-`/milestone <title>` adds a milestone, `/task <milestone-number> <description>` adds a task,
-`/done TASK-0001` completes one, and `/import <relative-markdown-file>` previews and asks before
-merging an imported plan. Import paths must stay inside the project and cannot traverse symlinks.
+`/milestone <title>` adds a milestone and captures a review baseline, `/task` adds a task,
+`/done TASK-0001` completes one, `/review` prints a bounded review
+bundle, and `/import <relative-markdown-file>` previews and asks before merging a plan. Import
+paths must stay inside the project and cannot traverse symlinks. Automatic checks and recorded
+review decisions are still being implemented.
 
 ## Project documentation
 
