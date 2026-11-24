@@ -1,0 +1,44 @@
+name: verify
+on: [push, pull_request]
+jobs:
+  cpp:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, compiler: gcc, preset: dev}
+          - {os: ubuntu-24.04, compiler: clang, preset: dev}
+          - {os: ubuntu-24.04, compiler: gcc, preset: asan}
+          - {os: ubuntu-24.04, compiler: gcc, preset: ubsan}
+          - {os: macos-14, compiler: llvm, preset: dev}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Linux prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang libcurl4-openssl-dev libsqlite3-dev
+      - name: GCC toolchain
+        if: matrix.compiler == 'gcc'
+        run: |
+          echo 'CC=gcc' >> "$GITHUB_ENV"
+          echo 'CXX=g++' >> "$GITHUB_ENV"
+      - name: Clang toolchain
+        if: matrix.compiler == 'clang'
+        run: |
+          echo 'CC=clang' >> "$GITHUB_ENV"
+          echo 'CXX=clang++' >> "$GITHUB_ENV"
+      - name: macOS toolchain
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm ninja curl sqlite
+          echo "CC=$(brew --prefix llvm)/bin/clang" >> "$GITHUB_ENV"
+          echo "CXX=$(brew --prefix llvm)/bin/clang++" >> "$GITHUB_ENV"
+          echo 'CXXFLAGS=-stdlib=libc++' >> "$GITHUB_ENV"
+          echo "LDFLAGS=-L$(brew --prefix llvm)/lib/c++ -Wl,-rpath,$(brew --prefix llvm)/lib/c++" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix curl);$(brew --prefix sqlite)" >> "$GITHUB_ENV"
+      - run: cmake --preset ${{ matrix.preset }}
+      - run: cmake --build --preset ${{ matrix.preset }}
+      - run: ctest --preset ${{ matrix.preset }} --output-on-failure
+      - run: python3 -m unittest discover -s bench/tests -v

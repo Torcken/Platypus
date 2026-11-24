@@ -10,3 +10,4 @@ add_library(llm STATIC
 )
 
 target_include_directories(llm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(llm PUBLIC util CURL::libcurl tomlplusplus::tomlplusplus)

@@ -1,22 +1,21 @@
 #ifndef PLATYPUS_CORE_CONCURRENCY_HPP
 #define PLATYPUS_CORE_CONCURRENCY_HPP
 
-#include <thread>
-#include <stop_token>
+#include "../util/logger.hpp"
+#include "../util/result.hpp"
 #include <functional>
 #include <future>
+#include <stop_token>
+#include <thread>
 #include <vector>
-#include "../util/result.hpp"
-#include "../util/logger.hpp"
 
 namespace platypus::core {
 
 /**
  * @brief Represents a background task that supports cooperative cancellation.
  */
-template <typename T>
-class Task {
-public:
+template <typename T> class Task {
+  public:
     using Callback = std::function<T(std::stop_token)>;
 
     Task(Callback callback) : callback_(std::move(callback)) {}
@@ -29,33 +28,36 @@ public:
         auto promise = std::make_shared<std::promise<util::Result<T>>>();
         std::future<util::Result<T>> future = promise->get_future();
 
-        std::thread([this, stop_token, promise]() {
+        worker_ = std::jthread([callback = callback_, stop_token, promise]() {
             try {
                 if (stop_token.stop_requested()) {
-                    promise->set_value(util::Result<T>("Task cancelled by stop_token"));
+                    promise->set_value(util::Result<T>::fail("Task cancelled by stop_token"));
                     return;
                 }
-                promise->set_value(callback_(stop_token));
-            } catch (const std::exception& e) {
-                promise->set_value(util::Result<T>(std::string("Task failed with exception: ") + e.what()));
+                promise->set_value(util::Result<T>::ok(callback(stop_token)));
+            } catch (const std::exception &e) {
+                promise->set_value(
+                    util::Result<T>::fail(std::string("Task failed with exception: ") + e.what()));
             }
-        }).detach();
+        });
 
         return future;
     }
 
-private:
+  private:
     Callback callback_;
+    std::jthread worker_;
 };
 
 /**
  * @brief Manages the three primary threads of the Platypus agent.
  */
 class ConcurrencyManager {
-public:
-    ConcurrencyManager() : ui_thread_([this]() { run_ui_loop(); }),
-                           generation_thread_([this]() { run_generation_loop(); }),
-                           shell_thread_([this]() { run_shell_loop(); }) {}
+  public:
+    ConcurrencyManager()
+        : ui_thread_([this]() { run_ui_loop(); }),
+          generation_thread_([this]() { run_generation_loop(); }),
+          shell_thread_([this]() { run_shell_loop(); }) {}
 
     ~ConcurrencyManager() {
         request_stop();
@@ -69,7 +71,7 @@ public:
         util::Logger::get_instance().info("Stop requested for all threads.");
     }
 
-private:
+  private:
     void run_ui_loop() {
         while (!stop_source_.get_token().stop_requested()) {
             // UI updates, progress reporting, etc.

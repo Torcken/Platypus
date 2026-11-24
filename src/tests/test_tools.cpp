@@ -1,36 +1,36 @@
-#include "tool.hpp"
 #include "../util/result.hpp"
+#include "core/tool.hpp"
 #include <cassert>
-#include <iostream>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 
 namespace platypus::core {
 
 void test_find_tool() {
-    ToolRegistry registry;
+    ToolRegistry registry(std::filesystem::current_path(), [](const auto &) { return true; });
     register_filesystem_tools(registry);
 
-    const Tool* find_tool = registry.get_tool("find");
+    const Tool *find_tool = registry.get_tool("find");
     assert(find_tool != nullptr);
 
     // Test existing path
     nlohmann::json args1 = {{"path", "."}, {"pattern", "*.cpp"}};
-    auto res1 = find_tool->execute(args1);
+    auto res1 = registry.execute("find", args1);
     assert(res1.is_ok());
     std::cout << "test_find_tool (path=.) - OK" << std::endl;
 
     // Test non-existent path
     nlohmann::json args2 = {{"path", "/non/existent/path/12345"}, {"pattern", "*.cpp"}};
-    auto res2 = find_tool->execute(args2);
-    // Note: the current find tool implementation uses `popen` and `find` command. 
+    auto res2 = registry.execute("find", args2);
+    // Note: the current find tool implementation uses `popen` and `find` command.
     // If path doesn't exist, `find` will return non-zero and the tool returns fail.
     assert(res2.is_err());
     std::cout << "test_find_tool (non-existent path) - OK" << std::endl;
 }
 
 void test_multi_replace_tool() {
-    ToolRegistry registry;
+    ToolRegistry registry(std::filesystem::current_path(), [](const auto &) { return true; });
     register_filesystem_tools(registry);
 
     // Create a dummy file for testing
@@ -39,17 +39,15 @@ void test_multi_replace_tool() {
     ofs << "Hello World\nReplace this.\n";
     ofs.close();
 
-    const Tool* replace_tool = registry.get_tool("multi_replace_text");
+    const Tool *replace_tool = registry.get_tool("multi_replace_text");
     assert(replace_tool != nullptr);
 
-    nlohmann::json args = {
-        {"path", "."},
-        {"old_string", "Replace this."},
-        {"new_string", "Success!"},
-        {"recursive", false}
-    };
+    nlohmann::json args = {{"path", "."},
+                           {"old_string", "Replace this."},
+                           {"new_string", "Success!"},
+                           {"recursive", false}};
 
-    auto res = replace_tool->execute(args);
+    auto res = registry.execute("multi_replace_text", args);
     assert(res.is_ok());
 
     // Verify content
@@ -63,22 +61,20 @@ void test_multi_replace_tool() {
 }
 
 void test_grep_tool() {
-    ToolRegistry registry;
+    ToolRegistry registry(std::filesystem::current_path(), [](const auto &) { return true; });
     register_search_tools(registry);
 
-    const Tool* grep_tool = registry.get_tool("grep");
+    const Tool *grep_tool = registry.get_tool("grep");
     assert(grep_tool != nullptr);
 
     // Test regex matching
-    nlohmann::json args = {
-        {"path", "."},
-        {"pattern", "platypus"},
-        {"recursive", false}
-    };
+    nlohmann::json args = {{"path", "."}, {"pattern", "platypus"}, {"recursive", false}};
 
-    auto res = grep_tool->execute(args);
+    std::ofstream("grep_fixture.txt") << "platypus\n";
+    auto res = registry.execute("grep", args);
+    std::filesystem::remove("grep_fixture.txt");
     assert(res.is_ok());
-    // The result should contain some lines from the project
+    // Search a maintained local fixture, independent of the source checkout layout.
     assert(res.value().length() > 0);
     std::cout << "test_grep_tool - OK" << std::endl;
 }

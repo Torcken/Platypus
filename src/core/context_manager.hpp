@@ -1,22 +1,22 @@
 #ifndef PLATYPUS_CORE_CONTEXT_MANAGER_HPP
 #define PLATYPUS_CORE_CONTEXT_MANAGER_HPP
 
-#include <vector>
-#include <string>
-#include <memory>
 #include "../llm/backend.hpp"
 #include "../util/result.hpp"
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace platypus::core {
 
 /**
  * @brief Manages the conversation history, sliding window, and summarization.
- * 
+ *
  * This class ensures that the conversation history remains within reasonable limits
  * by using a sliding window and summarizing older turns when the limit is exceeded.
  */
 class ContextManager {
-public:
+  public:
     /**
      * @brief Constructs the ContextManager.
      * @param backend The LLM backend to use for summarization.
@@ -29,10 +29,10 @@ public:
      * @param role The role of the turn (e.g., "user", "assistant", "system").
      * @param content The content of the turn.
      */
-    void add_turn(const std::string& role, const std::string& content);
+    void add_turn(const std::string &role, const std::string &content);
 
     /**
-     * @brief Checks if history exceeds max_history_ and generates a summary if necessary.
+     * @brief Compacts at an explicit task boundary; the execution loop never calls this mid-task.
      */
     void update();
 
@@ -46,7 +46,7 @@ public:
      */
     std::string get_summary() const;
 
-private:
+  private:
     /**
      * @brief Generates a summary of the intermediate conversation turns.
      * @return A result indicating success and the summary string.

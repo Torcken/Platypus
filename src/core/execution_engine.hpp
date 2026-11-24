@@ -1,16 +1,18 @@
 #ifndef PLATYPUS_CORE_EXECUTION_ENGINE_HPP
 #define PLATYPUS_CORE_EXECUTION_ENGINE_HPP
 
-#include "tool.hpp"
-#include "context_manager.hpp"
 #include "../llm/backend.hpp"
 #include "../llm/chat_formatter.hpp"
-#include "../util/result.hpp"
 #include "../util/logger.hpp"
-#include <vector>
+#include "../util/result.hpp"
+#include "context_manager.hpp"
+#include "session/store.hpp"
+#include "tool.hpp"
 #include <memory>
-#include <string>
 #include <nlohmann/json.hpp>
+#include <stop_token>
+#include <string>
+#include <vector>
 
 namespace platypus::core {
 
@@ -34,16 +36,15 @@ struct Action {
  * @brief The ExecutionEngine manages the agent's interaction loop.
  */
 class ExecutionEngine {
-public:
+  public:
     /**
      * @brief Constructs the ExecutionEngine.
      * @param backend The LLM backend to use.
      * @param tool_registry The registry of available tools.
      * @param max_history The maximum number of history turns to keep.
      */
-    ExecutionEngine(std::shared_ptr<llm::LlmBackend> backend, 
-                    std::shared_ptr<ToolRegistry> tool_registry,
-                    size_t max_history = 20);
+    ExecutionEngine(std::shared_ptr<llm::LlmBackend> backend,
+                    std::shared_ptr<ToolRegistry> tool_registry, size_t max_history = 20);
 
     /**
      * @brief Runs the agent's reasoning loop for a given query.
@@ -52,13 +53,22 @@ public:
      * @param headless Whether to run in headless mode.
      * @return A Result containing the final response from the agent.
      */
-    util::Result<std::string> run(const std::string& query, int max_steps = 10, bool headless = false);
+    util::Result<std::string> run(const std::string &query, int max_steps = 25,
+                                  bool headless = false, std::stop_token stop = {});
 
-private:
+    /// Attach a session log; history is loaded without appending duplicate records.
+    util::Result<bool> attach_session(std::shared_ptr<session::Store> store, const std::string &id);
+    void set_token_callback(llm::TokenCallback callback) { on_token_ = std::move(callback); }
+
+  private:
+    llm::TokenCallback on_token_;
+    void append_turn(const std::string &role, const std::string &text);
+    std::shared_ptr<session::Store> session_store_;
+    std::string session_id_;
     /**
      * @brief Helper to format the current state into a prompt for the LLM.
      */
-    std::string build_prompt(const std::vector<std::pair<std::string, std::string>>& history);
+    std::string build_prompt(const std::vector<std::pair<std::string, std::string>> &history);
 
     std::shared_ptr<llm::LlmBackend> backend_;
     std::shared_ptr<ToolRegistry> tool_registry_;
@@ -66,7 +76,6 @@ private:
 
     std::vector<PlanStep> current_plan_;
     size_t active_plan_index_ = 0;
-
 };
 
 } // namespace platypus::core
