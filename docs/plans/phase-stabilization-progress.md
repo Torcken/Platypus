@@ -54,3 +54,9 @@ are now present with compatibility includes for original callers. Dev/ASan/UBSan
 and CTest each passed 9/9; Python unittest passed 41/41. Remaining foundation work: EditFormat,
 fuzzy selection evidence, ripgrep, fuzzing, streaming wire-call parity, sampling propagation, lint
 and external model/CI/usage checks. Clang/libFuzzer is not installed in this environment.
+
+Parser continuation (ADR-015): bounded literal native scanning, full Gemma batches, duplicate/depth
+checks, no embedded-JSON fallback and a shared fuzz entry implemented. Added seeds, optional
+Clang/libFuzzer target and CI smoke job. Dev/ASan/UBSan configure/build and CTest each passed 9/9,
+including 2,000 deterministic fuzz-entry mutations; Python passed 41/41. The GCC compiler guard
+was checked in a disposable build. Actual libFuzzer and remote CI remain unverified.

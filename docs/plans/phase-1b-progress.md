@@ -8,8 +8,13 @@
 - [x] Canonical agent::ContextManager budgets rendered prompts, reserves replies and rejects
   overflow without changing history; tokenizer failures stop generation (ADR-012).
 - [ ] EditFormat interface and unambiguous fuzzy edit implementation selected by benchmark evidence.
-- [ ] Fuzz targets and ripgrep-backed search.
+- [x] Bounded native/JSON parser, duplicate/depth checks, full Gemma batches and no embedded-JSON
+  fallback after native failures; 2,000 mutation smoke cases in every preset (ADR-015).
+- [x] Tool-call libFuzzer target, seed corpus and CI smoke job written.
+- [ ] Execute a coverage-guided campaign on Clang/libFuzzer; unavailable locally.
+- [ ] Edit-format fuzz target and ripgrep-backed search.
 - [x] Per-profile token/context status with tokenizer counts or explicit estimate labels.
 - [x] Canonical tools::Tool/ToolResult/ToolContext; registry/built-ins in src/tools/;
   bounded UTF-8 success/error observations with persisted truncation flags (ADR-013).
-- [ ] Broader native-codec adversarial regression corpus.
+- [x] Native-codec adversarial regressions for long payloads, invalid bytes, duplicate keys,
+  nested/encoded JSON and malformed batches.

@@ -7,10 +7,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <thread>
 #include <unistd.h>
 namespace fs = std::filesystem;
 using namespace platypus;
+extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size);
 namespace {
 struct Workspace {
     fs::path root;
@@ -751,4 +753,77 @@ TEST_CASE("A failed metadata restore recovers original content and retains the u
     REQUIRE(read(workspace.root / "extra") == "keep this");
     REQUIRE(fs::is_directory(workspace.root / "empty"));
     REQUIRE(read(workspace.root / ".platypus/undo.json") == stack);
+}
+
+TEST_CASE("Native parsing rejects malformed batches without executing embedded JSON data") {
+    auto embedded = R"({"tool_call":{"name":"write","arguments":{"path":"x","content":"bad"}}})";
+    REQUIRE(core::Codec::parse_tool_calls(std::string("<function=read><parameter=path>") + embedded,
+                                          "qwen_xml")
+                .empty());
+    REQUIRE(core::Codec::parse_tool_calls(std::string("<|tool_call>call:read{") + embedded, "gemma")
+                .empty());
+    auto first = R"(<|tool_call>call:read{path:<|"|>a<|"|>}<tool_call|>)";
+    auto second = R"(<|tool_call>call:read{path:<|"|>b<|"|>}<tool_call|>)";
+    auto batch = core::Codec::parse_tool_calls(std::string(first) + second, "gemma");
+    REQUIRE(batch.size() == 2);
+    REQUIRE(batch[0].arguments.at("path") == "a");
+    REQUIRE(batch[1].arguments.at("path") == "b");
+    REQUIRE(
+        core::Codec::parse_tool_calls(std::string(first) + "<|tool_call>broken", "gemma").empty());
+    REQUIRE(
+        core::Codec::parse_tool_calls(
+            "<function=read><parameter=path>a</parameter><parameter=path>b</parameter></function>",
+            "qwen_xml")
+            .empty());
+    REQUIRE(core::Codec::parse_tool_calls(
+                R"({"tool_call":{"name":"read","\u006eame":"write","arguments":{}}})")
+                .empty());
+    REQUIRE(core::Codec::parse_tool_calls(
+                R"(<|tool_call>call:read{path:<|"|>a<|"|>,path:<|"|>b<|"|>}<tool_call|>)", "gemma")
+                .empty());
+}
+
+TEST_CASE("Tool-call parser bounds native payloads JSON nesting and batch size") {
+    auto native =
+        "<function=read><parameter=path>" + std::string(20000, 'x') + "</parameter></function>";
+    auto calls = core::Codec::parse_tool_calls(native, "qwen_xml");
+    REQUIRE(calls.size() == 1);
+    REQUIRE(calls[0].arguments.at("path").get<std::string>().size() == 20000);
+    REQUIRE(core::Codec::parse_tool_calls(std::string(65537, 'x') + native, "qwen_xml").empty());
+    auto nested = std::string(256, '[') + "0" + std::string(256, ']');
+    REQUIRE(core::Codec::parse_tool_calls(
+                "{\"tool_call\":{\"name\":\"read\",\"arguments\":{\"path\":" + nested + "}}}")
+                .empty());
+    nlohmann::json encoded = {
+        {"tool_call", {{"name", "read"}, {"arguments", "{\"path\":" + nested + "}"}}}};
+    REQUIRE(core::Codec::parse_tool_calls(encoded.dump()).empty());
+    auto batch = nlohmann::json::array();
+    for (int i = 0; i < 65; ++i)
+        batch.push_back({{"name", "read"}, {"arguments", {{"path", "x"}}}});
+    REQUIRE(core::Codec::parse_tool_calls(nlohmann::json{{"tool_calls", batch}}.dump()).empty());
+    REQUIRE(core::Codec::parse_tool_calls("<function=read><parameter=path>" +
+                                              std::string(1, '\xff') + "</parameter></function>",
+                                          "qwen_xml")
+                .empty());
+}
+
+TEST_CASE("Fuzz entry survives deterministic mutations across all syntax families") {
+    std::vector<std::string> seeds{
+        R"({"tool_call":{"name":"read","arguments":{"path":"x"}}})",
+        R"({"tool_call":{"name":"read","arguments":{"path":"x",}}})",
+        "<function=read><parameter=path>x</parameter></function>",
+        R"(<|tool_call>call:read{path:<|"|>x<|"|>}<tool_call|>)",
+        "<function=read><parameter=path>{\"tool_call\":{\"name\":\"write\"}}",
+        std::string(300, '['),
+        ""};
+    std::mt19937 random(1234);
+    for (int iteration = 0; iteration < 2000; ++iteration) {
+        auto input = seeds[random() % seeds.size()];
+        auto position = random() % (input.size() + 1);
+        input.insert(position, 1, static_cast<char>(random() % 256));
+        if (iteration % 3 == 0)
+            input.resize(random() % (input.size() + 1));
+        REQUIRE(LLVMFuzzerTestOneInput(reinterpret_cast<const std::uint8_t *>(input.data()),
+                                       input.size()) == 0);
+    }
 }

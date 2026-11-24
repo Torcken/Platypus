@@ -42,3 +42,28 @@ jobs:
       - run: cmake --build --preset ${{ matrix.preset }}
       - run: ctest --preset ${{ matrix.preset }} --output-on-failure
       - run: python3 -m unittest discover -s bench/tests -v
+  fuzz:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fuzz prerequisites
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang libclang-rt-dev libcurl4-openssl-dev libsqlite3-dev
+      - name: Configure instrumented parser
+        run: >-
+          cmake -S . -B build/fuzz -G Ninja -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++ -DPLATYPUS_BUILD_FUZZERS=ON
+          -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Debug
+      - run: cmake --build build/fuzz --target fuzz_tool_calls -j2
+      - name: Fuzz smoke campaign
+        run: |
+          mkdir -p build/fuzz/corpus/tool_calls
+          cp tests/fuzz/corpus/tool_calls/* build/fuzz/corpus/tool_calls/
+          ./build/fuzz/fuzz_tool_calls build/fuzz/corpus/tool_calls -runs=10000 -max_len=65537 -timeout=5 -artifact_prefix=build/fuzz/
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: parser-fuzz-artifacts
+          path: |
+            build/fuzz/crash-*
+            build/fuzz/timeout-*
+            build/fuzz/oom-*

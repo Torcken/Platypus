@@ -1,9 +1,7 @@
 #ifndef PLATYPUS_CORE_CODEC_HPP
 #define PLATYPUS_CORE_CODEC_HPP
 
-#include "tool.hpp"
 #include <nlohmann/json.hpp>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -21,10 +19,11 @@ class Codec {
      *
      * Supports:
      * 1. JSON format: {"tool_calls": [{"name": "...", "arguments": {...}}]}
-     * 2. Raw text: "Call tool: name, args: {...}" (Simplified)
+     * 2. Native Qwen XML and Gemma tool-call syntax selected by the profile.
      *
      * @param response The raw string output from the LLM backend.
      * @return A vector of ToolCall objects.
+     * Malformed native batches, excessive nesting and responses over 64 KiB return no calls.
      */
     static std::vector<ToolCall>
     parse_tool_calls(const std::string &response, const std::string &syntax = "json_tagged",

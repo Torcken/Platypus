@@ -17,3 +17,9 @@
 - The agent can successfully parse tool calls from multiple different LLM outputs.
 - All core tools (read, write, list, grep, run) function correctly and respect safety boundaries (ADR-003).
 - The agent can complete a multi-step task in a fully non-interactive mode.
+
+Parser continuation: replace recursive-regex XML scanning with bounded literal scanning; reject
+deep/oversized JSON, malformed native calls and duplicate native arguments without falling through
+to JSON embedded inside argument data. Parse every Gemma call in a batch. Add adversarial Catch2
+regressions and an optional Clang/libFuzzer target with seed corpus and a CI smoke job. Local
+Clang/libFuzzer is unavailable; report that target as unverified until run on a supported compiler.

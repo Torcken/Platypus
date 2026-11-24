@@ -1,0 +1,1 @@
+<tool_call><function=read><parameter=path>x</parameter><parameter=start_line>2</parameter></function></tool_call>
