@@ -1,5 +1,6 @@
 # Phase 2 progress
 
+- [x] Concept documentation for grammar-constrained decoding and context management.
 - [x] Offline GBNF generator for JSON-tagged, Qwen XML and Gemma single calls, with flat schema
   validation, optional fields and any property ordering (ADR-019). llama.cpp validator and model
   compatibility remain unverified; request-path activation is gated on paired evidence.
