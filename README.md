@@ -45,3 +45,17 @@ Read `SESSION_PROMPT.md`, `CLAUDE.md`, `docs/ROADMAP.md`, then accepted ADRs in 
 [Benchmark guide](bench/README.md) documents five verified task fixtures and edit experiments.
 [Development progress](docs/plans/phase-stabilization-progress.md) records the resumption milestone.
 Real-model baselines, hardware installation, and sustained-use exit criteria remain unverified.
+
+## Optional fuzzing
+
+With Clang and libFuzzer installed, build the parser and exact-edit fuzz targets in a separate
+directory. Regex editing is intentionally excluded because the standard-library regex engine does
+not guarantee bounded runtime for arbitrary patterns.
+
+```sh
+cmake -S . -B build/fuzz -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+  -DPLATYPUS_BUILD_FUZZERS=ON -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Debug
+cmake --build build/fuzz --target fuzz_tool_calls fuzz_edit_format
+./build/fuzz/fuzz_tool_calls tests/fuzz/corpus/tool_calls -runs=10000 -max_len=65537 -timeout=5
+./build/fuzz/fuzz_edit_format tests/fuzz/corpus/edit_format -runs=10000 -max_len=1024 -timeout=2
+```

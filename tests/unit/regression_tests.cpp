@@ -13,6 +13,7 @@
 namespace fs = std::filesystem;
 using namespace platypus;
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size);
+extern "C" int LLVMFuzzerEditFormatTestOneInput(const std::uint8_t *data, std::size_t size);
 namespace {
 struct Workspace {
     fs::path root;
@@ -831,5 +832,7 @@ TEST_CASE("Fuzz entry survives deterministic mutations across all syntax familie
             input.resize(random() % (input.size() + 1));
         REQUIRE(LLVMFuzzerTestOneInput(reinterpret_cast<const std::uint8_t *>(input.data()),
                                        input.size()) == 0);
+        REQUIRE(LLVMFuzzerEditFormatTestOneInput(
+                    reinterpret_cast<const std::uint8_t *>(input.data()), input.size()) == 0);
     }
 }

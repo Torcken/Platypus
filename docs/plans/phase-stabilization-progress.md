@@ -42,6 +42,10 @@ Sampling continuation (ADR-016): strict profile fields now propagate to generic 
 completion requests; the benchmark request recorder observes those actual values. Focused profile
 and loopback request tests pass. Real-server equivalence remains unverified.
 
+Edit fuzz continuation: an exact-replacement libFuzzer entry, seed corpus, CI smoke campaign and
+2,000 deterministic regression mutations are in place. Regex is excluded because `std::regex` does
+not guarantee bounded runtime. Local coverage-guided execution remains pending Clang/libFuzzer.
+
 Continuation: baseline provenance/comparison gates implemented (ADR-009); 32 Python tests passed.
 
 Native history continuation (ADR-010): typed tool observations, native declarations and response

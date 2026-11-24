@@ -75,7 +75,8 @@ if(BUILD_TESTING)
     target_link_libraries(history_truncation_test PRIVATE core)
     target_compile_options(history_truncation_test PRIVATE -UNDEBUG)
     add_test(NAME history_truncation_test COMMAND history_truncation_test)
-    add_executable(regression_tests tests/unit/regression_tests.cpp tests/fuzz/tool_calls.cpp)
+    add_executable(regression_tests tests/unit/regression_tests.cpp tests/fuzz/tool_calls.cpp
+        tests/fuzz/edit_format.cpp)
     target_link_libraries(regression_tests PRIVATE core Catch2::Catch2WithMain)
     add_test(NAME regression_tests COMMAND regression_tests)
     add_test(NAME cli_integration COMMAND ${Python3_EXECUTABLE}
@@ -100,4 +101,11 @@ extern \"C\" int LLVMFuzzerTestOneInput(const unsigned char*, std::size_t) { ret
     target_compile_options(fuzz_tool_calls PRIVATE -Wall -Wextra -Wpedantic
         -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer)
     target_link_options(fuzz_tool_calls PRIVATE -fsanitize=fuzzer,address,undefined)
+    add_executable(fuzz_edit_format tests/fuzz/edit_format.cpp tests/fuzz/edit_format_main.cpp
+        src/tools/edit_format.cpp)
+    target_include_directories(fuzz_edit_format PRIVATE "${PROJECT_SOURCE_DIR}/src")
+    target_link_libraries(fuzz_edit_format PRIVATE nlohmann_json::nlohmann_json)
+    target_compile_options(fuzz_edit_format PRIVATE -Wall -Wextra -Wpedantic
+        -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer)
+    target_link_options(fuzz_edit_format PRIVATE -fsanitize=fuzzer,address,undefined)
 endif()
