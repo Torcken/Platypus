@@ -9,6 +9,8 @@ Status: implementation substantially restored; human exit criterion remains pend
 - [x] Ten edit fixtures and three experiment formats with real application/validation.
 - [x] Wilson reporting, paired per-task bootstrap, null/n/a handling.
 - [x] Full CPU-only pipeline test: runner → proxy → fake server/client → verifier → JSONL → report.
+- [x] Independent native-call scoring and deduplicated edit errors; CLI/proxy fixtures cover
+  JSON, Qwen XML and Gemma without changing the model request (ADR-011).
 - [x] Excluded warm-ups and seeded task/client randomization for matrix runs.
 - [x] Gate baseline publication on complete metadata, checked local artifact hashes/client version,
   matching task sets and compatible serving settings (ADR-009). Remote serving facts remain human-verified.

@@ -2,6 +2,7 @@
 // CURL owns connections; stop_token cancellation interrupts transfers via the progress callback.
 #include "llama_server_backend.hpp"
 #include "chat_formatter.hpp"
+#include <cstdlib>
 #include <curl/curl.h>
 #include <memory>
 #include <nlohmann/json.hpp>
@@ -13,7 +14,8 @@ struct CurlGlobal {
 };
 util::Result<std::string> request(const std::string &url, const std::string *payload,
                                   std::stop_token stop,
-                                  const std::function<void(std::string_view)> &callback = {}) {
+                                  const std::function<void(std::string_view)> &callback = {},
+                                  const std::string &metadata = {}) {
     static CurlGlobal initialized;
     (void)initialized;
     using Return = util::Result<std::string>;
@@ -56,6 +58,14 @@ util::Result<std::string> request(const std::string &url, const std::string *pay
             }
         });
     curl_slist *headers = curl_slist_append(nullptr, "Content-Type: application/json");
+    if (!metadata.empty()) {
+        auto *updated = curl_slist_append(headers, ("X-Platypus-Benchmark: " + metadata).c_str());
+        if (!updated) {
+            curl_slist_free_all(headers);
+            return Return::fail("Cannot allocate benchmark metadata header");
+        }
+        headers = updated;
+    }
     std::unique_ptr<curl_slist, decltype(&curl_slist_free_all)> header_owner(headers,
                                                                              curl_slist_free_all);
     curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, headers);
@@ -79,10 +89,55 @@ nlohmann::json messages_json(const std::vector<std::pair<std::string, std::strin
 LlamaServerBackend::LlamaServerBackend(std::string base_url) : base_url_(std::move(base_url)) {
     while (!base_url_.empty() && base_url_.back() == '/')
         base_url_.pop_back();
+    auto *trace = std::getenv("PLATYPUS_BENCHMARK_TRACE");
+    benchmark_metadata_enabled_ = trace && std::string_view(trace) == "1";
+}
+util::Result<CompletionResult> LlamaServerBackend::complete(const CompletionRequest &completion,
+                                                            TokenCallback on_token,
+                                                            std::stop_token stop) try {
+    benchmark_metadata_.clear();
+    if (benchmark_metadata_enabled_) {
+        nlohmann::json observations = nlohmann::json::array();
+        for (std::size_t i = 0; i < completion.messages.size(); ++i) {
+            const auto &[role, text] = completion.messages[i];
+            if (role == "tool") {
+                auto result = nlohmann::json::parse(text);
+                observations.push_back(
+                    {{"id", i}, {"name", result.at("name")}, {"is_error", result.at("is_error")}});
+            }
+        }
+        nlohmann::json reasoning = nlohmann::json::object();
+        if (profile_) {
+            auto suffix = profile_->generation_suffix;
+            auto last = suffix.find_last_not_of(" \t\r\n");
+            if (last != std::string::npos)
+                suffix.resize(last + 1);
+            reasoning = {{"open", profile_->reasoning_open},
+                         {"close", profile_->reasoning_close},
+                         {"implicit", !profile_->reasoning_open.empty() &&
+                                          suffix.ends_with(profile_->reasoning_open)}};
+        }
+        benchmark_metadata_ = nlohmann::json{
+            {"version", 1},
+            {"syntax", profile_ ? profile_->tool_syntax : "json_tagged"},
+            {"tools", completion.tools},
+            {"reasoning", reasoning},
+            {"observations",
+             observations}}.dump(-1, ' ', true);
+        if (benchmark_metadata_.size() > 48 * 1024)
+            return util::Result<CompletionResult>::fail("Benchmark metadata exceeds header limit");
+    }
+    auto result = LlmBackend::complete(completion, std::move(on_token), stop);
+    benchmark_metadata_.clear();
+    return result;
+} catch (const std::exception &error) {
+    benchmark_metadata_.clear();
+    return util::Result<CompletionResult>::fail(error.what());
 }
 util::Result<std::string> LlamaServerBackend::post_request(const std::string &endpoint,
                                                            const std::string &payload) {
-    return request(base_url_ + endpoint, &payload, stop_);
+    return request(base_url_ + endpoint, &payload, stop_, {},
+                   endpoint == "/tokenize" ? "" : benchmark_metadata_);
 }
 util::Result<std::string> LlamaServerBackend::health() {
     return request(base_url_ + "/health", nullptr, stop_);
@@ -142,18 +197,21 @@ util::Result<util::Void>
 LlamaServerBackend::stream_request(const std::string &endpoint, const std::string &body,
                                    std::function<void(const std::string &)> callback) {
     std::string pending;
-    auto result = request(base_url_ + endpoint, &body, stop_, [&](std::string_view chunk) {
-        pending.append(chunk);
-        std::size_t newline;
-        while ((newline = pending.find('\n')) != std::string::npos) {
-            auto line = pending.substr(0, newline);
-            pending.erase(0, newline + 1);
-            if (!line.empty() && line.back() == '\r')
-                line.pop_back();
-            if (line.starts_with("data: ") && line != "data: [DONE]")
-                callback(line.substr(6));
-        }
-    });
+    auto result = request(
+        base_url_ + endpoint, &body, stop_,
+        [&](std::string_view chunk) {
+            pending.append(chunk);
+            std::size_t newline;
+            while ((newline = pending.find('\n')) != std::string::npos) {
+                auto line = pending.substr(0, newline);
+                pending.erase(0, newline + 1);
+                if (!line.empty() && line.back() == '\r')
+                    line.pop_back();
+                if (line.starts_with("data: ") && line != "data: [DONE]")
+                    callback(line.substr(6));
+            }
+        },
+        benchmark_metadata_);
     return result.is_ok() ? util::Result<util::Void>::ok()
                           : util::Result<util::Void>::fail(result.error());
 }

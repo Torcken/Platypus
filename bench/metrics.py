@@ -5,6 +5,7 @@ import json
 import re
 import statistics
 from typing import Any
+from bench.tool_calls import extract_calls, metadata_error, valid_arguments, visible_text
 
 
 def compute_metrics(records: list[dict[str, Any]], edit_tools: set[str],
@@ -23,21 +24,38 @@ def compute_metrics(records: list[dict[str, Any]], edit_tools: set[str],
     failed_edits = 0
     tool_requests = False
     seen_results: set[str] = set()
+    metric_errors = []
     for record in completions:
         invalid_before = invalid
         request = record.get("request") or {}
+        metadata = record.get("client_metadata", {})
+        if "client_metadata" in record and (error := metadata_error(metadata)):
+            metric_errors.append(error)
+            metadata = {}
         tools = {tool.get("function", tool).get("name"): tool.get("function", tool)
-                 for tool in request.get("tools", [])}
+                 for tool in request.get("tools", metadata.get("tools", []))}
         tool_requests = tool_requests or bool(tools)
         response = record.get("response") or {}
         messages = [choice.get("message", {}) for choice in response.get("choices", [])]
+        if not messages and isinstance(response.get("content"), str):
+            messages = [{"content": response["content"]}]
         for message in messages:
             calls = message.get("tool_calls", [])
-            text = message.get("content") or ""
-            if not calls and any(marker in text for marker in ("<tool_call", '"tool_call"', "<function=", "<|tool_call|>")):
-                invalid += 1
+            if not calls:
+                try:
+                    text = visible_text(message.get("content") or "", metadata.get("reasoning", {}))
+                    calls = extract_calls(text, metadata.get("syntax", "json_tagged"), tools)
+                except ValueError:
+                    invalid += 1
+                    continue
             for raw in calls:
+                if not isinstance(raw, dict):
+                    invalid += 1
+                    continue
                 call = raw.get("function", raw)
+                if not isinstance(call, dict):
+                    invalid += 1
+                    continue
                 args = call.get("arguments", {})
                 try:
                     args = json.loads(args) if isinstance(args, str) else args
@@ -45,25 +63,17 @@ def compute_metrics(records: list[dict[str, Any]], edit_tools: set[str],
                     invalid += 1
                     continue
                 name = call.get("name")
-                schema = tools.get(name, {}).get("parameters", {})
-                wrong = not isinstance(args, dict) or name not in tools
-                if isinstance(args, dict):
-                    wrong |= any(key not in args for key in schema.get("required", []))
-                    checks = {"string": lambda item: isinstance(item, str),
-                              "integer": lambda item: type(item) is int,
-                              "number": lambda item: type(item) in (int, float),
-                              "boolean": lambda item: isinstance(item, bool),
-                              "array": lambda item: isinstance(item, list),
-                              "object": lambda item: isinstance(item, dict)}
-                    for key, value in args.items():
-                        kind = schema.get("properties", {}).get(key, {}).get("type")
-                        if kind in checks and not checks[kind](value):
-                            wrong = True
-                invalid += bool(wrong)
+                invalid += not valid_arguments(name, args, tools)
                 actions[str(name) + json.dumps(args, sort_keys=True, separators=(",", ":"))] += 1
         if invalid > invalid_before:
             invalid = invalid_before + 1
         if edit_tools:
+            for result in metadata.get("observations", []):
+                identifier = "trace:" + str(result.get("id"))
+                if identifier not in seen_results:
+                    seen_results.add(identifier)
+                    if result.get("name") in edit_tools and result.get("is_error") is True:
+                        failed_edits += 1
             previous_calls = {}
             for message in request.get("messages", []):
                 for raw in message.get("tool_calls", []):
@@ -74,13 +84,15 @@ def compute_metrics(records: list[dict[str, Any]], edit_tools: set[str],
                         and re.search(error_pattern, str(message.get("content", "")))):
                     seen_results.add(identifier)
                     failed_edits += 1
+    tool_metrics_known = tool_requests and not metric_errors
     return {
         "turns": len(completions), "prompt_tokens_total": total,
         "prompt_tokens_processed": processed,
         "cache_hit_ratio": cached / total if total else None,
         "prefill_ms": sum(prefill) if len(prefill) == len(timings) and timings else None,
         "prefill_ms_median": statistics.median(prefill) if prefill else None,
-        "invalid_tool_calls": invalid if tool_requests else None,
-        "failed_edits": failed_edits if edit_tools and tool_requests else None,
-        "loops": sum(max(0, count - 3) for count in actions.values()) if tool_requests else None,
+        "invalid_tool_calls": invalid if tool_metrics_known else None,
+        "failed_edits": failed_edits if edit_tools and tool_metrics_known else None,
+        "loops": sum(max(0, count - 3) for count in actions.values()) if tool_metrics_known else None,
+        "tool_metrics_errors": metric_errors,
     }

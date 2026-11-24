@@ -18,6 +18,10 @@ class LlamaServerBackend : public LlmBackend {
      */
     LlamaServerBackend(std::string base_url = "http://localhost:8080");
 
+    /// Add opt-in proxy metadata without modifying the model request or prompt.
+    util::Result<CompletionResult> complete(const CompletionRequest &request,
+                                            TokenCallback on_token, std::stop_token stop) override;
+
     util::Result<std::vector<ChatChunk>>
     generate_chat(const std::vector<std::pair<std::string, std::string>> &messages,
                   float temperature = 0.7f, int max_tokens = 4096) override;
@@ -36,6 +40,8 @@ class LlamaServerBackend : public LlmBackend {
   private:
     std::string base_url_;
     std::optional<ModelProfile> profile_;
+    bool benchmark_metadata_enabled_ = false;
+    std::string benchmark_metadata_;
 
     // Helper methods for network communication (to be implemented in .cpp)
     util::Result<std::string> post_request(const std::string &endpoint,

@@ -15,6 +15,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+if __package__ in (None, ""):
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from bench.tool_calls import metadata_error
+
 
 class ProxyServer:
     """Forward HTTP traffic and record one redacted JSONL object per completed exchange."""
@@ -44,12 +49,16 @@ class ProxyServer:
                 value = pattern.sub("[REDACTED]", value)
         return value
 
-    def _save_record(self, endpoint: str, request_data: Any, response_data: Any) -> None:
+    def _save_record(self, endpoint: str, request_data: Any, response_data: Any,
+                     client_metadata: dict[str, Any] | None = None) -> None:
         timings = response_data.get("timings", {}) if isinstance(response_data, dict) else {}
-        record = self._redact({
+        record = {
             "timestamp": datetime.now(timezone.utc).isoformat(), "endpoint": endpoint,
             "request": request_data, "response": response_data, "timings": timings,
-        })
+        }
+        if client_metadata is not None:
+            record["client_metadata"] = client_metadata
+        record = self._redact(record)
         with self.lock, self.recording.open("a", encoding="utf-8") as output:
             output.write(json.dumps(record) + "\n")
 
@@ -124,8 +133,17 @@ class ProxyServer:
             def forward(self) -> None:
                 size = int(self.headers.get("Content-Length", "0"))
                 body = self.rfile.read(size) if size else None
+                metadata = None
+                if trace := self.headers.get("X-Platypus-Benchmark"):
+                    try:
+                        metadata = json.loads(trace)
+                        if error := metadata_error(metadata):
+                            raise ValueError(error)
+                    except ValueError as error:
+                        metadata = {"error": str(error)}
                 headers = {key: value for key, value in self.headers.items()
-                           if key.lower() not in {"host", "connection", "transfer-encoding"}}
+                           if key.lower() not in {"host", "connection", "transfer-encoding",
+                                                  "x-platypus-benchmark"}}
                 connection_type = (http.client.HTTPSConnection if upstream.scheme == "https"
                                    else http.client.HTTPConnection)
                 connection = connection_type(upstream.hostname, upstream.port, timeout=300)
@@ -149,9 +167,10 @@ class ProxyServer:
                         request_data = json.loads(body) if body else None
                     except (ValueError, UnicodeError):
                         request_data = {"raw": body.decode(errors="replace")}
-                    owner._save_record(self.path, request_data, owner._assemble(bytes(raw), streaming))
+                    owner._save_record(self.path, request_data,
+                                       owner._assemble(bytes(raw), streaming), metadata)
                 except (OSError, http.client.HTTPException) as error:
-                    owner._save_record(self.path, None, {"error": str(error)})
+                    owner._save_record(self.path, None, {"error": str(error)}, metadata)
                     self.close_connection = True
                 finally:
                     connection.close()

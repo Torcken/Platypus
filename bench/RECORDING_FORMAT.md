@@ -2,7 +2,8 @@
 
 This document defines the JSONL format used by the recording proxy to capture `llama-server` interactions.
 
-All records are stored as individual JSON lines in a file named `bench/results/<date>-<label>.jsonl`.
+Exchanges are stored as individual JSON lines in `bench/recordings/` or the runner's sibling
+`recordings/` directory. Aggregated run metrics are separate `bench/results/*.jsonl` files.
 
 ## Schema
 
@@ -10,7 +11,7 @@ Each line in the JSONL file must contain the following fields:
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `timestamp` | string | ISO 8601 timestamp of the request start. |
+| `timestamp` | string | ISO 8601 UTC timestamp when the exchange was recorded. |
 | `endpoint` | string | The API endpoint called (e.g., `/v1/chat/completions`). |
 | `request` | object | The full JSON request body sent to `llama-server`. |
 | `response` | object | The full JSON response body received from `llama-server`. |
@@ -20,11 +21,27 @@ Each line in the JSONL file must contain the following fields:
 
 The `timings` block is provided by `llama.cpp` and must be preserved exactly as received:
 
-- `prompt_n`: Number of tokens in the prompt.
+- `prompt_n`: Number of prompt tokens processed (sum with `cache_n` for total prompt tokens).
 - `cache_n`: Number of tokens retrieved from the KV cache.
 - `prompt_ms`: Time taken to process the prompt (in milliseconds).
 - `predicted_n`: Number of tokens generated.
 - `predicted_ms`: Time taken to generate the tokens (in milliseconds).
+
+## Optional native-client metadata
+
+The Platypus benchmark adapter enables `PLATYPUS_BENCHMARK_TRACE=1`. Generation requests then
+carry an `X-Platypus-Benchmark` JSON header, capped at 48 KiB. The proxy removes this header before
+forwarding and stores it as `client_metadata`; the model request and prompt remain unchanged.
+Normal CLI sessions do not send it. Version 1 includes the tool schemas already present in the
+prompt, syntax family, reasoning delimiters, and observations (`id`, `name`, `is_error`). It omits
+observation contents; IDs are stable history positions for deduplication across repeated requests.
+
+Scoring extracts calls from actual model responses with strict JSON, Qwen XML or Gemma syntax
+parsing and the same minimal schema checks as wire function calls. It does not reuse the agent's
+tolerant parser. Invalid metadata makes tool metrics unavailable and records `tool_metrics_errors`.
+Tool results become visible in the following request; an error immediately before cancellation
+without another generation cannot be observed by this protocol. As with third-party tool
+messages, error status is supplied by the client; task success comes only from the verifier.
 
 ## Example Record
 

@@ -17,7 +17,8 @@ def fake_server(edit: dict[str, str] | None = None, responses: list[str] | None 
         def do_POST(self):
             request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             if captured is not None:
-                captured.append({"endpoint": self.path, "body": request})
+                captured.append({"endpoint": self.path, "body": request,
+                                 "headers": dict(self.headers.items())})
             if self.path == "/tokenize":
                 body = json.dumps({"tokens": list(range(10))}).encode()
                 self.send_response(200)

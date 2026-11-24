@@ -76,7 +76,8 @@ util::Result<std::string> ExecutionEngine::run(const std::string &query, int max
         if (bytes > static_cast<std::size_t>(context_limit - output_limit))
             return Return::fail("Context budget reached; start a new session");
         auto response = backend_->complete(
-            {messages, profile ? profile->temperature : 0.3f, output_limit}, on_token_, stop);
+            {messages, profile ? profile->temperature : 0.3f, output_limit, tools}, on_token_,
+            stop);
         if (!response.is_ok())
             return Return::fail(response.error());
         std::string text = response.value().content;

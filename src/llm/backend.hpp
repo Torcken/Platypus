@@ -5,6 +5,7 @@
 #include "../util/result.hpp"
 #include "model_profile.hpp"
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <stop_token>
 #include <string>
 #include <vector>
@@ -27,6 +28,8 @@ struct CompletionRequest {
     std::vector<std::pair<std::string, std::string>> messages;
     float temperature = 0.3f;
     int max_tokens = 2048;
+    /// Schemas already rendered in the prompt; optional benchmark instrumentation uses these.
+    nlohmann::json tools = nlohmann::json::array();
 };
 struct CompletionResult {
     std::string content;
