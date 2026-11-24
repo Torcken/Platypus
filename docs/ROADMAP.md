@@ -7,6 +7,10 @@ Each phase has an **exit criterion**. Criteria marked *(human)* need real models
 human measures them with the benchmark. Your job for those is the tooling and a written test
 protocol in the phase report.
 
+Status audited 2026-11-24: benchmark/core implementation has resumed. No whole-phase human
+exit criterion is satisfied yet. Unchecked compound items can contain working components;
+the progress records identify their remaining requirements.
+
 Phase 1 is split into sub-phases (1a–1d) because it does not fit in one session. Treat each
 sub-phase as a phase: its own plan, progress file, branch and report.
 
@@ -179,64 +183,60 @@ Include how to emulate a smaller tier on a larger card: fewer GPU layers (`-ngl`
 scenarios of `CLAUDE.md` section 9 covered. *(human)* Success rate at least equal to the best
 phase-0 baseline at the same model and tier, and two weeks of real use with no lost work.
 
-### Phase 1a — Skeleton and LLM layer
-
-Concept docs: `chat-templates.md`, `cancellation-in-cpp.md`.
-
-1. CMake skeleton, presets, CPM dependencies (pinned), toolchain check for `std::jthread`, CI,
+...
+## Phase 1a — Skeleton and LLM layer (partially verified)
+- [ ] CMake skeleton, presets, CPM dependencies (pinned), toolchain check for `std::jthread`, CI,
    `.clang-format`, `.clang-tidy`.
-2. `util`: `Result<T>`, logging, string helpers, token estimate.
-3. Concurrency model: one thread for generation, one for the UI, one per running shell command.
+- [ ] `util`: `Result<T>`, logging, string helpers, token estimate.
+- [ ] Concurrency model: one thread for generation, one for the UI, one per running shell command.
    Cancellation through `std::stop_token`. Document it in `cancellation-in-cpp.md`.
-4. `LlmBackend`, `FakeBackend` (replays phase-0 recording format), `LlamaServerBackend`: calls
+- [ ] `LlmBackend`, `FakeBackend` (replays phase-0 recording format), `LlamaServerBackend`: calls
    `/completion` with streaming, `cache_prompt: true`, and the profile's sampling settings. The
    **chat template is applied client-side** from the profile so Platypus controls the exact prefix.
    Also `/health` and `/tokenize`. Field names from the pinned llama.cpp README.
-5. Model profiles (TOML): role prefixes and suffixes, tool-call syntax family, stop strings,
+- [ ] Model profiles (TOML): role prefixes and suffixes, tool-call syntax family, stop strings,
    sampling, reasoning handling, edit format, context size per tier. Ship
    `profiles/ornith-1.0.toml` and `profiles/gemma-4.toml`, each value with a comment pointing to
    its source. ADR for the reasoning-history default (see "Model facts").
 
-### Phase 1b — Tools and agent loop
-
-Concept docs: `tool-calling.md`, `agent-loop.md`.
-
-1. Tool-call codecs (one per syntax family used by the shipped profiles) and the tolerant parser:
+## Phase 1b — Tools and agent loop (partially verified)
+- [ ] Tool-call codecs (one per syntax family used by the shipped profiles) and the tolerant parser:
    extra commas, unclosed quotes or braces, JSON surrounded by text. Fuzz target.
-2. Six tools: `read` (line ranges), `list` (glob), `grep` (ripgrep, capped), `edit` (search/replace
+- [ ] Six tools: `read` (line ranges), `list` (glob), `grep` (ripgrep, capped), `edit` (search/replace
    blocks with fuzzy matching, behind an `EditFormat` interface so phase-0 results can switch the
    default), `write`, `run` (timeout, output cap). All paths resolved inside the project root.
-3. Agent loop: build prompt → generate → parse tool calls → execute → append result. Stops on a
+- [ ] Agent loop: build prompt → generate → parse tool calls → execute → append result. Stops on a
    final answer or after 25 steps (configurable). Minimal `ContextManager`: budget check and
    tool-output truncation only.
-4. **Headless mode:** `platypus run --headless --yes "<instruction>"` runs one task without the
+- [x] **Headless mode:** `platypus run --headless --yes "<instruction>"` runs one task without the
    TUI. Integration tests and the bench adapter use it.
-5. Integration tests: successful edit, recovered invalid tool call, retried failed edit, stopped
+- [x] Integration tests: successful edit, recovered invalid tool call, retried failed edit, stopped
    loop.
 
-### Phase 1c — Safety and sessions
+## Phase 1c — Safety and sessions
 
-Concept doc: `snapshots-and-undo.md`.
+- [x] Durable shadow Git snapshots, approved diffs, undo, path containment and command confirmation.
+- [x] Append-only SQLite sessions and resume.
+- [ ] Broader restore-failure/concurrent-filesystem validation and API migration to SnapshotStore.
 
-1. Shadow git repository in `.platypus/snapshots` (never touches the user's own git history), a
-    snapshot before every change, `/undo`, diff shown before applying, confirmation for every `run`
-   through a `Confirmer` interface (tests answer automatically). ADR-003 defines the permission,
-   path-containment, snapshot, and headless-mode contract.
-2. Sessions: append-only log in SQLite (`.platypus/sessions.db`), resume with
-   `platypus --resume [id]`.
+## Phase 1d — TUI and bench adapter
 
-### Phase 1d — TUI and bench adapter
+- [x] Minimal FTXUI history/input, streamed generation, approval prompts and cancellation.
+- [x] Headless Platypus benchmark adapter and architecture document.
+- [ ] Accurate token/context status display, sustained interactive testing and real-model benchmarks.
 
-1. Minimal FTXUI interface: scrolling history, input box, live generation, status bar (model,
-   tokens used, context used in %). Esc cancels generation and tools cleanly.
-2. Cancellation integration test.
-3. Bench adapter so the phase-0 harness can run Platypus (headless mode, through the proxy).
-4. `docs/ARCHITECTURE.md` complete for phase 1.
+## Stabilization & Foundation (Current Phase)
+- [x] Enhance CMake configuration (ctest, presets).
+- [x] Address safety contract (snapshots, diffs, `run_command` safety).
+- [x] Resolve CLI/Factory mismatch.
+- [x] Update documentation.
+- [x] Refine production toolset and error handling.
 
----
+These checkmarks record the resumption milestone, not completion of the whole MVP.
+See `docs/plans/phase-stabilization-progress.md` for remaining code and human exit criteria.
 
 ## Phase 2 — Reliability with small models
-
+...
 Concept docs: `grammar-constrained-decoding.md`, `context-management.md`.
 
 1. **Grammar:** a GBNF generator per tool-call codec, from each tool's JSON schema. The output

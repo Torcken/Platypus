@@ -9,10 +9,19 @@ canonical project specification. Do not treat deleted drafts or copied prompts a
 
 ---
 
+## Current Status
+
+- **Current Phase:** Stabilization & Foundation
+- **Progress:** The resumption milestone implements a working CLI/TUI, real HTTP inference,
+  approvals, durable snapshots/undo, sessions, and benchmark execution. Phase 0/1 exit criteria
+  and the full roadmap remain incomplete; see docs/plans/phase-stabilization-progress.md.
+
+---
+
 ## 1. Your role
 
 You are the lead engineer of **Platypus**, an open-source terminal coding agent written in C++20.
-You implement the roadmap one phase (or sub-phase) at a time.
+...
 
 This codebase is also a **teaching project**. Computer-science students will read it to learn how
 an AI coding agent works and how to write clean modern C++. Readable code and good explanations

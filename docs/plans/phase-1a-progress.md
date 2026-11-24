@@ -1,26 +1,14 @@
-# Phase 1a Progress: Core Layer and Execution Engine
+# Phase 1a progress
 
-This document tracks the progress of Phase 1a.
+- [x] CMake dev/ASan/UBSan, pinned CPM dependencies, compiled jthread check, executable and tests.
+- [x] Actual libcurl HTTP/SSE, /completion, /health, /tokenize, stop-token cancellation.
+- [x] Validated TOML profiles and client-side role formatting; no model-name branches.
+- [x] Ornith/Gemma syntax parsing, reasoning policy, prefix-stability regression tests.
+- [x] Joined generation/UI workers and platform-local bounded subprocess execution.
+- [x] Formatting configuration and Linux/macOS CI workflow written.
+- [ ] Run CI, especially macOS toolchain discovery; production clang-tidy cleanup remains.
+- [ ] Verify native tool-history/template parity against real models and per-tier settings.
+- [x] Replay Phase 0 JSONL fixtures with explicit exhaustion and malformed-input errors.
+- [ ] Complete canonical API migration.
 
-## Status
-- **Active Phase**: 1a
-- **Current Task**: [Completed]
-
-## Progress
-- [DONE] Create directory structure for src (util, llm, core) and profiles
-- [DONE] Create CMakeLists.txt with C++20 and std::jthread check
-- [DONE] Create CMakePresets.json
-- [DONE] Implement Core Utilities (Result<T>, logger, string utils)
-- [DONE] Implement Concurrency Model (Task, ConcurrencyManager, std::stop_token)
-- [DONE] Implement LLM Layer: LlmBackend interface and FakeBackend
-- [DONE] Implement LLM Layer: LlamaServerBackend
-- [DONE] Implement Chat Template (ChatFormatter)
-- [DONE] Implement Model Profiles (ModelProfileManager)
-- [DONE] Implement Tool System Foundation (ToolRegistry, Tool struct)
-- [DONE] Implement Execution Engine (think-act-observe loop, history handling)
-- [DONE] Implement Common Tool Placeholders (filesystem, shell)
-- [DONE] Create Main Entry Point (src/main.cpp)
-
-## Notes
-- [Date: 2026-11-20] Phase 1a core components completed.
-- [Date: 2026-11-20] Basic execution loop verified with unit tests.
+Not a completed phase: source-derived profiles and local fixtures are not hardware acceptance.

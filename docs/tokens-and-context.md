@@ -21,7 +21,7 @@ The benchmark system must ensure that the context window of the model is not exc
 
 - `prompt_tokens_total`: Total number of tokens in the prompt across all turns in a session.
 - `prompt_tokens_processed`: Number of prompt tokens that were actually processed by the model (may be less than `prompt_tokens_total` if parts of the prompt were retrieved from the KV cache).
-- `cache_hit_ratio`: The ratio of `cache_n` to `prompt_n` (or `prompt_tokens_processed`).
+- `cache_hit_ratio`: `sum(cache_n) / sum(prompt_n + cache_n)` across completion requests.
 - `prefill_ms`: Time taken to process the prompt tokens (`prompt_ms`).
 
 ## Implementation Notes

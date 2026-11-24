@@ -1,8 +1,9 @@
-# Phase 2 Progress
+# Phase 2 progress
 
-- [x] Implement multi-file editing logic (Refined `write_file` and `replace` logic)
-- [ ] Enhance the `ExecutionEngine` to support explicit planning steps
-- [ ] Add advanced tools: `find`, `sed` (via shell), and complex regex-based searches
-- [ ] Implement "Context Window Management" for long-running tasks
-- [ ] Develop a set of E2E tests for the C++ agent in a sandboxed environment
-- [ ] Prepare for Phase 3: Production Deployment and Optimization
+- [ ] GBNF generators and grammar tests.
+- [ ] Real-recording parser regression corpus.
+- [ ] Ranked tree-sitter repository map.
+- [ ] Measured per-tier context management.
+- [ ] Runtime prefix diagnostics (a deterministic template regression exists).
+- [ ] Repeated-action corrective loop guard.
+- [ ] Human paired benchmark exit measurements.

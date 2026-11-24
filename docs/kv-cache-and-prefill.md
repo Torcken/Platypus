@@ -29,4 +29,4 @@ The Platypus benchmark aims to capture and analyze these metrics to evaluate mod
 ## Implementation Notes
 
 - The `timings` block provided by `llama-server` is our primary source for these metrics.
-- When calculating the `cache_hit_ratio`, we use the ratio of `cache_n` to `prompt_n`.
+- When calculating the `cache_hit_ratio`, we use `sum(cache_n) / sum(prompt_n + cache_n)` across completion requests.

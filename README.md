@@ -1,27 +1,46 @@
 # Platypus
 
-Platypus is a planned C++20 terminal coding agent for open-weight models running on consumer
-hardware. It prioritizes small-model reliability, safe repository changes, and measurable gains.
+A C++20 terminal coding agent for open-weight models served locally with llama-server.
+The current milestone restores a working headless/terminal core and a measured benchmark pipeline.
+**The full roadmap and v1.0 are not complete.** See the phase records for verified scope and gaps.
 
-## Project status
+## Build and test
 
-The repository starts at Phase 0: a Python 3.11+ benchmark harness. There is no product source
-code yet; do not begin C++ work until Phase 0's benchmark gate is met.
+Requires CMake 3.24+, Ninja, a C++20 compiler with std::jthread, Python 3.11+, Git, libcurl and
+SQLite development packages. CPM fetches pinned JSON, Catch2 v3, toml++, reproc and FTXUI sources.
 
-## Canonical documentation
+```sh
+cmake --preset dev
+cmake --build --preset dev
+ctest --preset dev --output-on-failure
+python3 -m unittest discover -s bench/tests -v
+```
 
-Read these files in order:
+Repeat the CMake commands with `asan` and `ubsan` for sanitizers. Initial dependency downloads
+need network access; cached builds and fixture tests run without external services or a GPU.
 
-1. `SESSION_PROMPT.md` — current phase and approval state.
-2. `CLAUDE.md` — standing engineering rules, architecture, and verification requirements.
-3. `docs/ROADMAP.md` — phase deliverables and exit criteria.
-4. `docs/decisions/` — accepted architecture decisions.
+## Run locally
 
-`docs/benchmark-protocol.md` governs benchmark execution and data handling. Plans, progress, and
-reports belong in `docs/plans/`.
+Start your llama-server separately, using the release pinned in ADR-002.
 
-## Version pin
+```sh
+./build/dev/platypus
+./build/dev/platypus run --headless --yes --project /path/to/repo --endpoint http://127.0.0.1:8080 "Fix the failing test"
+./build/dev/platypus --profile profiles/ornith-1.0.toml
+./build/dev/platypus --resume 1
+./build/dev/platypus undo --project /path/to/repo
+```
 
-Phase 0 and Phase 1 use `llama.cpp` `v1.0.0` at commit
-`2d8a32502909ca065c41c4cf5f2fb1c427c047fc`. Change it only through an ADR and rerun affected
-benchmarks.
+An interactive terminal opens FTXUI; redirected input uses a line interface. Read/list/grep are
+read-only. Writes/edits and shell commands require explicit approval; `--yes` approves and logs
+all actions for that invocation. Commands have deadlines/output limits. Snapshots and append-only
+sessions live in `.platypus/`, independent of your Git history. `/undo` previews a restore.
+The shell is not a sandbox. Source-derived profiles still require real-model compatibility checks.
+
+## Project documentation
+
+Read `SESSION_PROMPT.md`, `CLAUDE.md`, `docs/ROADMAP.md`, then accepted ADRs in `docs/decisions/`.
+[Architecture](docs/ARCHITECTURE.md) explains the current modules.
+[Benchmark guide](bench/README.md) documents five verified task fixtures and edit experiments.
+[Development progress](docs/plans/phase-stabilization-progress.md) records the resumption milestone.
+Real-model baselines, hardware installation, and sustained-use exit criteria remain unverified.
