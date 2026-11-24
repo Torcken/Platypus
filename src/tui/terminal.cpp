@@ -1,6 +1,7 @@
 // Thread-safe terminal history, input, approval prompts and cooperative cancellation.
 // Only the worker touches the engine. FTXUI PostEvent wakes the UI after state changes.
 #include "terminal.hpp"
+#include "core/plan_commands.hpp"
 #include <algorithm>
 #include <condition_variable>
 #include <ftxui/component/component.hpp>
@@ -19,7 +20,8 @@ int run_terminal(core::ExecutionEngine &engine, core::ToolRegistry &tools, const
     auto screen = ScreenInteractive::Fullscreen();
     std::mutex mutex;
     std::condition_variable_any answered;
-    std::string history = "Platypus — enter a task, /undo, or /quit\n";
+    std::string history =
+        "Platypus — enter a task, /plan, /milestone, /task, /done, /import, /undo, or /quit\n";
     std::string input;
     std::string context_status = "Context: waiting for first request";
     bool busy = false, approving = false;
@@ -130,6 +132,8 @@ int run_terminal(core::ExecutionEngine &engine, core::ToolRegistry &tools, const
                 tools.snapshots().set_stop_token(task_stop.get_token());
                 auto result = tools.snapshots().rollback();
                 append(result.is_ok() ? "Snapshot restored\n" : result.error() + "\n");
+            } else if (auto plan_response = core::handle_plan_command(query, tools.snapshots())) {
+                append(*plan_response);
             } else {
                 auto result = engine.run(query, steps, false, task_stop.get_token());
                 append(result.is_ok() ? "\n" : "\nError: " + result.error() + "\n");

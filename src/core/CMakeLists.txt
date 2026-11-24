@@ -8,6 +8,8 @@ add_library(core STATIC
     ../tools/tool.cpp
     ../agent/context_manager.cpp
     ../agent/repository_map.cpp
+    plan_store.cpp
+    plan_commands.cpp
     execution_engine.cpp
     ../session/store.cpp
 )

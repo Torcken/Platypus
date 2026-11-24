@@ -39,6 +39,11 @@ sessions live in `.platypus/`, independent of your Git history. `/undo` previews
 The shell is not a sandbox. Source-derived profiles still require real-model compatibility checks.
 Set `PLATYPUS_DEBUG_PREFIX=1` to log when the rendered system prefix changes between generations.
 
+The interactive plan commands manage a validated, project-local `PLAN.md`: `/plan` shows it,
+`/milestone <title>` adds a milestone, `/task <milestone-number> <description>` adds a task,
+`/done TASK-0001` completes one, and `/import <relative-markdown-file>` previews and asks before
+merging an imported plan. Import paths must stay inside the project and cannot traverse symlinks.
+
 ## Project documentation
 
 Read `SESSION_PROMPT.md`, `CLAUDE.md`, `docs/ROADMAP.md`, then accepted ADRs in `docs/decisions/`.

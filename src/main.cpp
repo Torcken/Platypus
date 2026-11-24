@@ -1,6 +1,7 @@
 // Command-line entry point wires the real backend, safe tools and sequential agent.
 // Mutating headless runs require --yes; interactive runs approve each diff/command.
 #include "core/execution_engine.hpp"
+#include "core/plan_commands.hpp"
 #include "llm/llm_backend_factory.hpp"
 #include "tui/terminal.hpp"
 #include <csignal>
@@ -156,7 +157,7 @@ int main(int argc, char *argv[]) {
             return execute(task);
         if (headless)
             throw std::runtime_error("Headless mode requires an instruction");
-        std::cout << "Platypus — /undo, /quit, or enter a task\n";
+        std::cout << "Platypus — /plan, /milestone, /task, /done, /import, /undo, /quit\n";
         while (!source.stop_requested()) {
             std::cout << "> " << std::flush;
             if (!std::getline(std::cin, task) || task == "/quit")
@@ -164,8 +165,13 @@ int main(int argc, char *argv[]) {
             if (task == "/undo") {
                 auto result = tools->snapshots().rollback();
                 std::cout << (result.is_ok() ? "Snapshot restored" : result.error()) << '\n';
-            } else if (!task.empty())
-                execute(task);
+            } else if (!task.empty()) {
+                auto plan_response = core::handle_plan_command(task, tools->snapshots());
+                if (plan_response)
+                    std::cout << *plan_response;
+                else
+                    execute(task);
+            }
         }
         return source.stop_requested() ? 130 : 0;
     } catch (const std::exception &e) {
