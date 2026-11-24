@@ -19,6 +19,8 @@ struct ChatChunk {
     std::string content;
     bool is_final = false;
     std::string role; // "assistant", "system", "user"
+    /// Replace accumulated content when a backend emits a canonical structured final payload.
+    bool replaces_content = false;
 };
 
 /**
@@ -56,11 +58,17 @@ class LlmBackend {
         if (on_token) {
             auto result = stream_chat(request.messages, request.temperature, request.max_tokens,
                                       [&](const ChatChunk &chunk) {
-                                          content += chunk.content;
-                                          on_token(chunk.content);
+                                          if (chunk.replaces_content)
+                                              content = chunk.content;
+                                          else
+                                              content += chunk.content;
+                                          if (!chunk.replaces_content)
+                                              on_token(chunk.content);
                                       });
             if (!result.is_ok())
                 return util::Result<CompletionResult>::fail(result.error());
+            if (content.empty())
+                return util::Result<CompletionResult>::fail("Empty completion");
         } else {
             auto result = generate_chat(request.messages, request.temperature, request.max_tokens);
             if (!result.is_ok())

@@ -8,6 +8,8 @@
 - [x] Canonical agent::ContextManager budgets rendered prompts, reserves replies and rejects
   overflow without changing history; tokenizer failures stop generation (ADR-012).
 - [ ] EditFormat interface and unambiguous fuzzy edit implementation selected by benchmark evidence.
+- [x] Streaming OpenAI tool-call deltas are assembled by index and emitted as one canonical agent
+  payload; incomplete batches fail closed (tested against the loopback HTTP fixture).
 - [x] Bounded native/JSON parser, duplicate/depth checks, full Gemma batches and no embedded-JSON
   fallback after native failures; 2,000 mutation smoke cases in every preset (ADR-015).
 - [x] Tool-call libFuzzer target, seed corpus and CI smoke job written.

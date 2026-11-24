@@ -1,5 +1,17 @@
 # Development resumption checkpoint — 2026-11-24
 
+## Latest continuation — streamed native tool calls
+
+The llama-server streaming path now assembles indexed OpenAI tool-call deltas, including fragmented
+names and arguments, and returns one canonical tool-call payload to the agent. That payload replaces
+interim stream text for execution and is not sent to the visible token callback. Incomplete batches
+are rejected, and SSE `data:` lines with or without one optional space are accepted. The loopback
+fixture verifies multiple calls, fragmented deltas, embedded JSON in interim text, ordinary text
+streaming, and incomplete-batch rejection.
+
+Verification for this continuation: Python 41/41; dev, ASan and UBSan each 9/9 CTest groups. The
+sanitizer suites were run with the permissions needed by LeakSanitizer and the loopback fixtures.
+
 ## Built
 
 - Restored the executable and dev/ASan/UBSan presets with pinned CPM dependencies and a real
@@ -59,8 +71,8 @@ without model measurements. Phase 6 remains post-v1.0 and conditional.
 - Baseline metadata must include verified binary/model hashes, versions, launch/sampling settings
   and task identities before interpreting gains. The current runner records supplied metadata but
   does not enforce completeness for every real-model run.
-- Finish EditFormat/fuzzy editing, ripgrep search, token/context
-  UI status, fuzzing, canonical API migration and lint cleanup before closing Phase 1.
+- Finish EditFormat/fuzzy editing, ripgrep-backed search, edit-format fuzzing, a local coverage-guided
+  campaign, sampling propagation checks, and lint cleanup before closing Phase 1.
 - Filesystem race/failure injection, interrupted restore recovery and sustained interactive behavior
   need broader validation. The CLI/TUI are functional development software, not a v1.0 release.
 - Phases 2–5 remain unimplemented. Their human installation/beta/usage exit criteria cannot be

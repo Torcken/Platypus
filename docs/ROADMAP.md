@@ -200,18 +200,19 @@ phase-0 baseline at the same model and tier, and two weeks of real use with no l
    its source. ADR for the reasoning-history default (see "Model facts").
 
 ## Phase 1b — Tools and agent loop (partially verified)
-- [ ] Tool-call codecs (one per syntax family used by the shipped profiles) and the tolerant parser:
-   extra commas, unclosed quotes or braces, JSON surrounded by text. Fuzz target.
-- [ ] Six tools: `read` (line ranges), `list` (glob), `grep` (ripgrep, capped), `edit` (search/replace
-   blocks with fuzzy matching, behind an `EditFormat` interface so phase-0 results can switch the
-   default), `write`, `run` (timeout, output cap). All paths resolved inside the project root.
-- [ ] Agent loop: build prompt → generate → parse tool calls → execute → append result. Stops on a
-   final answer or after 25 steps (configurable). Minimal `ContextManager`: budget check and
-   tool-output truncation only.
+- [x] JSON, Qwen XML and Gemma tool-call codecs; tolerant bounded parsing, with duplicate/depth
+   checks, adversarial regressions and a libFuzzer entry/corpus/CI job. Actual local coverage-guided
+   fuzzing remains unavailable until Clang/libFuzzer is installed.
+- [x] Six bounded tools (`read`, `list`, `grep`, `edit`, `write`, `run`) with project-root
+   containment, approval, snapshots, output limits and error recovery. Remaining: ripgrep-backed
+   search plus benchmark-gated `EditFormat`/fuzzy matching.
+- [x] Agent loop builds prompts, generates, parses/executes calls and appends observations; it stops
+   on a final answer or after a configurable 25-step bound. Canonical context budgeting now counts
+   rendered prompts, reserves reply tokens and fails closed on tokenizer errors (ADR-012).
 - [x] **Headless mode:** `platypus run --headless --yes "<instruction>"` runs one task without the
    TUI. Integration tests and the bench adapter use it.
 - [x] Integration tests: successful edit, recovered invalid tool call, retried failed edit, stopped
-   loop.
+   loop, native profile sessions and streamed tool-call batches.
 
 ## Phase 1c — Safety and sessions
 

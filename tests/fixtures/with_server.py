@@ -25,6 +25,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif self.path == "/completion":
             body = json.dumps({"content": "Fixture raw completion."})
             content_type = "application/json"
+        elif request.get("stream") and any(
+            message.get("content") == "Incomplete tools" for message in request.get("messages", [])
+        ):
+            chunks = [
+                {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "partial", "function": {"name": "read_file", "arguments": "{}"}}]}, "finish_reason": None}]},
+                {"choices": [{"delta": {}, "finish_reason": "stop"}]},
+            ]
+            body = "".join("data: " + json.dumps(chunk) + "\n\n" for chunk in chunks)
+            body += "data: [DONE]\n\n"
+            content_type = "text/event-stream"
+        elif request.get("stream") and any(
+            message.get("content") == "Use tools" for message in request.get("messages", [])
+        ):
+            chunks = [
+                {"choices": [{"delta": {"content": "Explanation with {\"tool_calls\": []}."}, "finish_reason": None}]},
+                {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "call_a", "type": "function", "function": {"name": "read_", "arguments": "{\"path\":"}}]}, "finish_reason": None}]},
+                {"choices": [{"delta": {"tool_calls": [{"index": 1, "id": "call_b", "type": "function", "function": {"name": "list_files", "arguments": "{\"path\":\".\"}"}}, {"index": 0, "function": {"name": "file", "arguments": "\"README.md\"}"}}]}, "finish_reason": None}]},
+                {"choices": [{"delta": {}, "finish_reason": "tool_calls"}]},
+            ]
+            body = "".join("data:" + json.dumps(chunk) + "\n\n" for chunk in chunks)
+            body += "data: [DONE]\n\n"
+            content_type = "text/event-stream"
         elif request.get("stream"):
             chunks = [
                 {"choices": [{"delta": {"content": "streamed "}, "finish_reason": None}]},

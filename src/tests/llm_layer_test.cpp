@@ -61,6 +61,22 @@ void test_llama_server_backend() {
                                        [&](const ChatChunk &chunk) { streamed += chunk.content; });
     assert(stream.is_ok());
     assert(streamed == "streamed response");
+    CompletionRequest request;
+    request.messages = {{"user", "Use tools"}};
+    request.tools =
+        nlohmann::json::array({{{"type", "function"}, {"function", {{"name", "read_file"}}}}});
+    std::string streamed_payload;
+    auto streamed_tools = backend->complete(
+        request, [&](const std::string &chunk) { streamed_payload += chunk; }, {});
+    assert(streamed_tools.is_ok());
+    auto calls = nlohmann::json::parse(streamed_tools.value().content).at("tool_calls");
+    assert(calls.size() == 2);
+    assert(calls.at(0).at("function").at("name") == "read_file");
+    assert(calls.at(1).at("function").at("name") == "list_files");
+    assert(streamed_payload.find("Explanation") != std::string::npos);
+    request.messages = {{"user", "Incomplete tools"}};
+    auto incomplete = backend->complete(request, [](const std::string &) {}, {});
+    assert(!incomplete.is_ok());
     auto tokens = backend->tokenize("test");
     assert(tokens.is_ok() && tokens.value().size() == 3);
     ModelProfile profile;

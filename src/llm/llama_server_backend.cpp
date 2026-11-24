@@ -4,8 +4,10 @@
 #include "chat_formatter.hpp"
 #include <cstdlib>
 #include <curl/curl.h>
+#include <map>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <stdexcept>
 namespace platypus::llm {
 namespace {
 struct CurlGlobal {
@@ -227,8 +229,13 @@ LlamaServerBackend::stream_request(const std::string &endpoint, const std::strin
                 pending.erase(0, newline + 1);
                 if (!line.empty() && line.back() == '\r')
                     line.pop_back();
-                if (line.starts_with("data: ") && line != "data: [DONE]")
-                    callback(line.substr(6));
+                if (line.starts_with("data:")) {
+                    auto data = line.substr(5);
+                    if (!data.empty() && data.front() == ' ')
+                        data.erase(0, 1);
+                    if (data != "[DONE]")
+                        callback(data);
+                }
             }
         },
         benchmark_metadata_);
@@ -255,7 +262,9 @@ LlamaServerBackend::stream_chat(const std::vector<std::pair<std::string, std::st
             {"stop", profile_->stop_strings},
             {"stream",
              true}}.dump();
-    return stream_request(
+    std::map<int, nlohmann::json> tool_calls;
+    bool finished_with_tool_calls = false;
+    auto result = stream_request(
         raw ? "/completion" : "/v1/chat/completions", body, [&](const std::string &chunk) {
             auto parsed = nlohmann::json::parse(chunk);
             if (raw) {
@@ -266,11 +275,64 @@ LlamaServerBackend::stream_chat(const std::vector<std::pair<std::string, std::st
             if (!parsed.contains("choices") || parsed.at("choices").empty())
                 return;
             auto choice = parsed.at("choices").at(0);
-            auto text =
-                choice.value("delta", nlohmann::json::object()).value("content", std::string{});
-            callback({text, !choice.value("finish_reason", nlohmann::json(nullptr)).is_null(),
-                      "assistant"});
+            auto delta = choice.value("delta", nlohmann::json::object());
+            if (!delta.is_object())
+                throw std::runtime_error("Invalid streaming delta");
+            if (delta.contains("tool_calls")) {
+                if (!delta.at("tool_calls").is_array())
+                    throw std::runtime_error("Invalid streaming tool calls");
+                for (const auto &call : delta.at("tool_calls")) {
+                    auto index = call.at("index").get<int>();
+                    if (index < 0 || index >= 64)
+                        throw std::runtime_error("Streaming tool call index out of range");
+                    auto &target =
+                        tool_calls
+                            .try_emplace(index, nlohmann::json{{"type", "function"},
+                                                               {"function",
+                                                                {{"name", ""}, {"arguments", ""}}}})
+                            .first->second;
+                    if (call.contains("id"))
+                        target["id"] = call.at("id");
+                    if (call.contains("type") && call.at("type") != "function")
+                        throw std::runtime_error("Unsupported streaming tool call type");
+                    if (call.contains("function")) {
+                        const auto &function = call.at("function");
+                        if (function.contains("name"))
+                            target["function"]["name"] =
+                                target["function"]["name"].get<std::string>() +
+                                function.at("name").get<std::string>();
+                        if (function.contains("arguments"))
+                            target["function"]["arguments"] =
+                                target["function"]["arguments"].get<std::string>() +
+                                function.at("arguments").get<std::string>();
+                    }
+                }
+            }
+            auto text = delta.value("content", std::string{});
+            if (!text.empty())
+                callback({text, false, "assistant"});
+            auto finish = choice.value("finish_reason", nlohmann::json(nullptr));
+            if (!finish.is_null()) {
+                finished_with_tool_calls = finish == "tool_calls";
+                callback({"", true, "assistant"});
+            }
         });
+    if (!result.is_ok())
+        return result;
+    if (!tool_calls.empty()) {
+        if (!finished_with_tool_calls)
+            return util::Result<util::Void>::fail("Incomplete streamed tool call batch");
+        nlohmann::json calls = nlohmann::json::array();
+        for (auto &[index, call] : tool_calls) {
+            (void)index;
+            if (call["function"]["name"].get<std::string>().empty())
+                return util::Result<util::Void>::fail("Streamed tool call has no function name");
+            calls.push_back(std::move(call));
+        }
+        callback(
+            {nlohmann::json{{"tool_calls", std::move(calls)}}.dump(), true, "assistant", true});
+    }
+    return result;
 } catch (const std::exception &e) {
     return util::Result<util::Void>::fail(e.what());
 }

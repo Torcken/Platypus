@@ -23,6 +23,12 @@ Next concrete work: native tool-history/profile checks,
 fuzz/edit interfaces, and obtain a verified model/server for real measurements.
 No measured model gain, macOS/GPU compatibility, sustained-use result or v1.0 readiness is claimed.
 
+Streaming continuation: llama-server SSE now assembles fragmented native tool-call batches by index,
+rejects incomplete batches, and returns canonical execution content without exposing it as visible
+text. Added tests for multiple calls, fragmented names/arguments, optional SSE spacing and incomplete
+batches. Verification after this change: Python 41/41; dev, ASan and UBSan CTest each 9/9. The two
+sanitizer suites require unsandboxed execution for LeakSanitizer and loopback sockets.
+
 Continuation: baseline provenance/comparison gates implemented (ADR-009); 32 Python tests passed.
 
 Native history continuation (ADR-010): typed tool observations, native declarations and response
