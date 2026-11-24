@@ -67,15 +67,15 @@ void test_grep_tool() {
     const Tool *grep_tool = registry.get_tool("grep");
     assert(grep_tool != nullptr);
 
-    // Test regex matching
-    nlohmann::json args = {{"path", "."}, {"pattern", "platypus"}, {"recursive", false}};
+    // Test regex matching while leaving files outside the worktree ignored.
+    auto root = std::filesystem::current_path();
+    nlohmann::json args = {{"path", "."}, {"pattern", "^platypus$"}, {"recursive", false}};
 
-    std::ofstream("grep_fixture.txt") << "platypus\n";
+    std::ofstream(root / "grep_fixture.txt") << "platypus\n";
     auto res = registry.execute("grep", args);
-    std::filesystem::remove("grep_fixture.txt");
     assert(res.is_ok());
-    // Search a maintained local fixture, independent of the source checkout layout.
-    assert(res.value().length() > 0);
+    assert(res.value().find("grep_fixture.txt:1:platypus") != std::string::npos);
+    std::filesystem::remove(root / "grep_fixture.txt");
     std::cout << "test_grep_tool - OK" << std::endl;
 }
 

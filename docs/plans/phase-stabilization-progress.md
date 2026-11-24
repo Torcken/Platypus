@@ -29,6 +29,10 @@ text. Added tests for multiple calls, fragmented names/arguments, optional SSE s
 batches. Verification after this change: Python 41/41; dev, ASan and UBSan CTest each 9/9. The two
 sanitizer suites require unsandboxed execution for LeakSanitizer and loopback sockets.
 
+Search continuation: `grep` now invokes ripgrep with an argv vector (no shell interpolation), respects
+the recursive flag, excludes Platypus/Git state, and preserves capped-output status. README records
+the runtime `rg` dependency. Dev, ASan and UBSan each passed 9/9 CTest groups; Python passed 41/41.
+
 Continuation: baseline provenance/comparison gates implemented (ADR-009); 32 Python tests passed.
 
 Native history continuation (ADR-010): typed tool observations, native declarations and response

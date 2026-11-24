@@ -14,7 +14,8 @@
   fallback after native failures; 2,000 mutation smoke cases in every preset (ADR-015).
 - [x] Tool-call libFuzzer target, seed corpus and CI smoke job written.
 - [ ] Execute a coverage-guided campaign on Clang/libFuzzer; unavailable locally.
-- [ ] Edit-format fuzz target and ripgrep-backed search.
+- [ ] Edit-format fuzz target.
+- [x] ripgrep-backed search with workspace containment, bounded output and explicit truncation.
 - [x] Per-profile token/context status with tokenizer counts or explicit estimate labels.
 - [x] Canonical tools::Tool/ToolResult/ToolContext; registry/built-ins in src/tools/;
   bounded UTF-8 success/error observations with persisted truncation flags (ADR-013).

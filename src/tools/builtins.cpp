@@ -193,32 +193,40 @@ void register_filesystem_tools(ToolRegistry &registry) {
 }
 void register_search_tools(ToolRegistry &registry) {
     registry.register_tool(
-        {"grep", "Search files with a regular expression; returns path:line: text.",
+        {"grep", "Search files with a regular expression; returns path:line:text.",
          schema({{"path", {{"type", "string"}}},
                  {"pattern", {{"type", "string"}}},
                  {"recursive", {{"type", "boolean"}}}},
                 {"pattern"}),
          [](const nlohmann::json &args, tools::ToolContext &context) -> Return {
              auto &sm = context.snapshots;
-             std::regex pattern(args.at("pattern").get<std::string>());
-             std::string result;
-             for (const auto &path :
-                  entries(sm, args.value("path", "."), args.value("recursive", false))) {
-                 if (!fs::is_regular_file(path))
-                     continue;
-                 std::ifstream input(path);
-                 std::string line;
-                 int number = 0;
-                 while (std::getline(input, line)) {
-                     ++number;
-                     if (std::regex_search(line, pattern))
-                         result += fs::relative(path, sm.root()).string() + ":" +
-                                   std::to_string(number) + ": " + line + "\n";
-                     if (result.size() > context.max_output_bytes)
-                         return Return::ok(result);
-                 }
-             }
-             return Return::ok(result);
+             auto path = sm.resolve(args.value("path", std::string(".")));
+             if (!path.is_ok())
+                 return Return::fail(path.error());
+             auto relative = path.value().lexically_relative(sm.root()).string();
+             std::vector<std::string> command{"rg",
+                                              "--line-number",
+                                              "--color",
+                                              "never",
+                                              "--hidden",
+                                              "--glob",
+                                              "!.git/**",
+                                              "--glob",
+                                              "!.platypus/**",
+                                              "--",
+                                              args.at("pattern").get<std::string>(),
+                                              relative.empty() ? "." : relative};
+             if (!args.value("recursive", false))
+                 command.insert(command.end() - 3, {"--maxdepth", "1"});
+             auto result = platform::run_process(command, sm.root(), std::chrono::seconds(30),
+                                                 context.max_output_bytes, sm.stop_token());
+             if (!result.is_ok())
+                 return Return::fail("ripgrep failed: " + result.error());
+             if (result.value().exit_code == 1)
+                 return Return::ok("");
+             if (result.value().exit_code != 0)
+                 return Return::fail("ripgrep failed: " + result.value().output);
+             return {result.value().output, false, result.value().truncated};
          }});
 }
 void register_shell_tools(ToolRegistry &registry) {

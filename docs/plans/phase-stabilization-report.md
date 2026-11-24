@@ -71,8 +71,8 @@ without model measurements. Phase 6 remains post-v1.0 and conditional.
 - Baseline metadata must include verified binary/model hashes, versions, launch/sampling settings
   and task identities before interpreting gains. The current runner records supplied metadata but
   does not enforce completeness for every real-model run.
-- Finish EditFormat/fuzzy editing, ripgrep-backed search, edit-format fuzzing, a local coverage-guided
-  campaign, sampling propagation checks, and lint cleanup before closing Phase 1.
+- Finish the EditFormat boundary and benchmark-gated fuzzy selection, edit-format fuzzing, a local
+  coverage-guided campaign, sampling propagation checks, and lint cleanup before closing Phase 1.
 - Filesystem race/failure injection, interrupted restore recovery and sustained interactive behavior
   need broader validation. The CLI/TUI are functional development software, not a v1.0 release.
 - Phases 2–5 remain unimplemented. Their human installation/beta/usage exit criteria cannot be

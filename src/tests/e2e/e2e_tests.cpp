@@ -98,7 +98,7 @@ int main() {
         "grep_task",
         {"{\"tool_call\": {\"name\": \"grep\", \"arguments\": {\"path\": \"./test_workspace_1\", "
          "\"pattern\": \"Search me!\", \"recursive\": false}}}",
-         "search_target.txt:3: Search me!"});
+         "search_target.txt:3:Search me!"});
 
     auto tool_registry_grep =
         std::make_shared<ToolRegistry>(fs::current_path(), [](const auto &) { return true; });
@@ -111,7 +111,7 @@ int main() {
     auto result_grep = engine_grep.run("grep_task");
 
     assert(result_grep.is_ok());
-    assert(result_grep.value().find("search_target.txt:3: Search me!") != std::string::npos);
+    assert(result_grep.value().find("search_target.txt:3:Search me!") != std::string::npos);
     std::cout << "Test Grep Search PASSED!" << std::endl;
 
     return 0;

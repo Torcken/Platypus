@@ -8,6 +8,7 @@ The current milestone restores a working headless/terminal core and a measured b
 
 Requires CMake 3.24+, Ninja, a C++20 compiler with std::jthread, Python 3.11+, Git, libcurl and
 SQLite development packages. CPM fetches pinned JSON, Catch2 v3, toml++, reproc and FTXUI sources.
+The `grep` tool additionally requires ripgrep (`rg`) on `PATH` at runtime.
 
 ```sh
 cmake --preset dev
