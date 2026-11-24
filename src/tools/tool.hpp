@@ -4,7 +4,7 @@
 #ifndef PLATYPUS_TOOLS_TOOL_HPP
 #define PLATYPUS_TOOLS_TOOL_HPP
 
-#include "util/snapshot.hpp"
+#include "safety/snapshot_store.hpp"
 #include <functional>
 #include <nlohmann/json.hpp>
 #include <string>
@@ -24,7 +24,7 @@ struct ToolResult {
 
 /// Per-call workspace permissions and output limit; owned and used by the agent worker only.
 struct ToolContext {
-    util::SnapshotManager &snapshots;
+    safety::SnapshotStore &snapshots;
     std::size_t max_output_bytes = 6000;
 };
 

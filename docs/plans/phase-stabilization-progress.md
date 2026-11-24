@@ -47,3 +47,10 @@ to src/tools/. Success and error text is capped inside a UTF-8 boundary; invalid
 and error/truncation flags survive session persistence. Dev, ASan and UBSan configure/build and
 CTest each passed 9/9; Python unittest passed 41/41. One intermediate overlapping dev rebuild
 failed to link; the subsequent build and complete verification passed. SnapshotStore is next.
+
+Snapshot continuation (ADR-014): canonical SnapshotStore, durable IDs/list/restore, stale approval
+rejection, manifest/ID validation and failed-restore recovery implemented. All canonical interfaces
+are now present with compatibility includes for original callers. Dev/ASan/UBSan configure/build
+and CTest each passed 9/9; Python unittest passed 41/41. Remaining foundation work: EditFormat,
+fuzzy selection evidence, ripgrep, fuzzing, streaming wire-call parity, sampling propagation, lint
+and external model/CI/usage checks. Clang/libFuzzer is not installed in this environment.

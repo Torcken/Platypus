@@ -11,7 +11,7 @@
 - [ ] Run CI, especially macOS toolchain discovery; production clang-tidy cleanup remains.
 - [ ] Verify native tool-history/template parity against real models and per-tier settings.
 - [x] Replay Phase 0 JSONL fixtures with explicit exhaustion and malformed-input errors.
-- [ ] Complete canonical API migration.
-  agent::ContextManager and tools::Tool/ToolResult are migrated; SnapshotStore remains.
+- [x] Canonical API migration: LlmBackend, agent::ContextManager, tools::Tool/ToolResult and
+  safety::SnapshotStore. Original core/util includes remain compatibility aliases.
 
 Not a completed phase: source-derived profiles and local fixtures are not hardware acceptance.

@@ -1,21 +1,58 @@
 // Implements durable snapshots under .platypus/snapshots, without touching user Git.
 // Tools call write(); the CLI calls rollback() for an approved undo operation.
-#include "snapshot.hpp"
+#include "snapshot_store.hpp"
 #include "platform/process.hpp"
 #include <algorithm>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <sstream>
-namespace platypus::util {
+namespace platypus::safety {
 namespace fs = std::filesystem;
 namespace {
+/// Only complete object IDs are accepted; revision expressions and option-like strings are refused.
+bool valid_id(const SnapshotId &id) {
+    return (id.size() == 40 || id.size() == 64) && std::all_of(id.begin(), id.end(), [](char c) {
+               return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+           });
+}
+
+/// Check persisted mode data before any restore mutates the workspace.
+nlohmann::json load_modes(const fs::path &root, const SnapshotId &id) {
+    auto directory = root / ".platypus/snapshot-modes";
+    auto file = directory / (id + ".json");
+    if (!valid_id(id) || fs::is_symlink(directory) || fs::is_symlink(file) ||
+        !fs::is_regular_file(file))
+        throw std::runtime_error("Unsafe or missing snapshot metadata");
+    std::ifstream input(file);
+    auto modes = nlohmann::json::parse(input);
+    for (const auto *group : {"files", "directories"}) {
+        if (!modes.at(group).is_object())
+            throw std::runtime_error("Invalid snapshot mode group");
+        for (const auto &[name, permissions] : modes.at(group).items()) {
+            auto path = fs::path(name);
+            if (path.empty() || path == "." || path.is_absolute() ||
+                name.find('\0') != std::string::npos)
+                throw std::runtime_error("Invalid snapshot mode path");
+            for (const auto &part : path)
+                if (part == ".." || part == ".git" || part == ".platypus")
+                    throw std::runtime_error("Unsafe snapshot mode path");
+            if (!permissions.is_number_integer() || permissions < 0 ||
+                permissions > static_cast<unsigned>(fs::perms::mask))
+                throw std::runtime_error("Invalid snapshot permission bits");
+        }
+    }
+    return modes;
+}
+
 nlohmann::json undo_stack(const fs::path &root) {
     auto file = root / ".platypus/undo.json";
     if (!fs::exists(file))
         return nlohmann::json::array();
     std::ifstream input(file);
     auto result = nlohmann::json::parse(input);
-    if (!result.is_array())
+    if (!result.is_array() || std::any_of(result.begin(), result.end(), [](const auto &id) {
+            return !id.is_string() || !valid_id(id.template get<std::string>());
+        }))
         throw std::runtime_error("Invalid undo stack");
     return result;
 }
@@ -59,17 +96,19 @@ void save_modes(const fs::path &root, const std::string &revision) {
         throw std::runtime_error("Unsafe snapshot metadata directory");
     fs::create_directories(directory);
     auto file = directory / (revision + ".json");
-    if (fs::is_symlink(file))
+    auto temporary = directory / (revision + ".json.tmp");
+    if (fs::is_symlink(file) || fs::is_symlink(temporary) || fs::exists(temporary))
         throw std::runtime_error("Unsafe snapshot mode metadata");
-    std::ofstream output(file);
+    std::ofstream output(temporary);
     output << modes.dump();
     output.close();
-    if (!output)
+    if (!output) {
+        fs::remove(temporary);
         throw std::runtime_error("Cannot save snapshot permissions");
+    }
+    fs::rename(temporary, file);
 }
-void restore_modes(const fs::path &root, const std::string &revision) {
-    std::ifstream input(root / ".platypus/snapshot-modes" / (revision + ".json"));
-    auto modes = nlohmann::json::parse(input);
+void restore_modes(const fs::path &root, const nlohmann::json &modes) {
     auto safe = [&](const std::string &relative) {
         auto path = fs::path(relative);
         if (path.empty() || path.is_absolute())
@@ -110,11 +149,11 @@ void restore_modes(const fs::path &root, const std::string &revision) {
         fs::permissions(safe(it.key()), static_cast<fs::perms>(it.value().get<unsigned>()));
 }
 } // namespace
-SnapshotManager::SnapshotManager(fs::path root, Confirmer confirmer)
+SnapshotStore::SnapshotStore(fs::path root, Confirmer confirmer)
     : root_(fs::canonical(std::move(root))), confirmer_(std::move(confirmer)) {}
-Result<fs::path> SnapshotManager::resolve(const std::string &path) const {
+Result<fs::path> SnapshotStore::resolve(const std::string &path) const {
     try {
-        if (path.empty())
+        if (path.empty() || path.find('\0') != std::string::npos)
             return Result<fs::path>::fail("Path is required");
         auto input = fs::path(path);
         auto resolved = fs::weakly_canonical(input.is_absolute() ? input : root_ / input);
@@ -129,10 +168,10 @@ Result<fs::path> SnapshotManager::resolve(const std::string &path) const {
         return Result<fs::path>::fail(e.what());
     }
 }
-bool SnapshotManager::confirm(const std::string &action) const {
+bool SnapshotStore::confirm(const std::string &action) const {
     return !stop_.stop_requested() && confirmer_ && confirmer_(action);
 }
-Result<std::string> SnapshotManager::git(const std::vector<std::string> &args) const {
+Result<std::string> SnapshotStore::git(const std::vector<std::string> &args) const {
     std::vector<std::string> command{"git",
                                      "--git-dir=" + (root_ / ".platypus/snapshots").string(),
                                      "--work-tree=" + root_.string(),
@@ -157,7 +196,7 @@ Result<std::string> SnapshotManager::git(const std::vector<std::string> &args) c
         return Result<std::string>::fail("Snapshot Git failed: " + result.value().output);
     return Result<std::string>::ok(result.value().output);
 }
-Result<bool> SnapshotManager::initialize() {
+Result<bool> SnapshotStore::initialize() {
     try {
         if (fs::is_symlink(root_ / ".platypus") || fs::is_symlink(root_ / ".platypus/snapshots"))
             return Result<bool>::fail("Snapshot storage cannot be a symlink");
@@ -173,20 +212,20 @@ Result<bool> SnapshotManager::initialize() {
         return Result<bool>::fail(e.what());
     }
 }
-Result<bool> SnapshotManager::take_snapshot(const std::string &reason) {
+Result<SnapshotId> SnapshotStore::snapshot(const std::string &reason) {
     auto initialized = initialize();
     if (!initialized.is_ok())
-        return initialized;
+        return Result<SnapshotId>::fail(initialized.error());
     auto staged =
         git({"add", "--all", "--force", "--", ".", ":(exclude).git", ":(exclude).platypus"});
     if (!staged.is_ok())
-        return Result<bool>::fail(staged.error());
+        return Result<SnapshotId>::fail(staged.error());
     auto commit = git({"commit", "--quiet", "--allow-empty", "-m", reason});
     if (!commit.is_ok())
-        return Result<bool>::fail(commit.error());
+        return Result<SnapshotId>::fail(commit.error());
     auto revision = git({"rev-parse", "HEAD"});
     if (!revision.is_ok())
-        return Result<bool>::fail(revision.error());
+        return Result<SnapshotId>::fail(revision.error());
     try {
         auto id = revision.value();
         id.erase(id.find_last_not_of("\r\n") + 1);
@@ -194,12 +233,41 @@ Result<bool> SnapshotManager::take_snapshot(const std::string &reason) {
         auto stack = undo_stack(root_);
         stack.push_back(id);
         save_stack(root_, stack);
-        return Result<bool>::ok(true);
+        return Result<SnapshotId>::ok(id);
     } catch (const std::exception &e) {
-        return Result<bool>::fail(e.what());
+        return Result<SnapshotId>::fail(e.what());
     }
 }
-Result<std::string> SnapshotManager::generate_diff(const std::string &) {
+Result<bool> SnapshotStore::take_snapshot(const std::string &reason) {
+    auto result = snapshot(reason);
+    return result.is_ok() ? Result<bool>::ok(true) : Result<bool>::fail(result.error());
+}
+
+Result<std::vector<SnapshotId>> SnapshotStore::list() const try {
+    using Return = Result<std::vector<SnapshotId>>;
+    if (fs::is_symlink(root_ / ".platypus") || fs::is_symlink(root_ / ".platypus/snapshots") ||
+        fs::is_symlink(root_ / ".platypus/snapshot-modes"))
+        return Return::fail("Snapshot storage cannot be a symlink");
+    if (!fs::exists(root_ / ".platypus/snapshots/HEAD"))
+        return Return::ok({});
+    auto log = git({"log", "--format=%H", "--all"});
+    if (!log.is_ok())
+        return Return::fail(log.error());
+    std::istringstream lines(log.value());
+    std::vector<SnapshotId> ids;
+    std::string id;
+    while (std::getline(lines, id)) {
+        if (!valid_id(id))
+            return Return::fail("Invalid snapshot object ID");
+        auto file = root_ / ".platypus/snapshot-modes" / (id + ".json");
+        if (fs::is_regular_file(fs::symlink_status(file)))
+            ids.push_back(id);
+    }
+    return Return::ok(std::move(ids));
+} catch (const std::exception &error) {
+    return Result<std::vector<SnapshotId>>::fail(error.what());
+}
+Result<std::string> SnapshotStore::generate_diff(const std::string &) {
     auto staged =
         git({"add", "--all", "--force", "--", ".", ":(exclude).git", ":(exclude).platypus"});
     if (!staged.is_ok())
@@ -207,7 +275,7 @@ Result<std::string> SnapshotManager::generate_diff(const std::string &) {
     return git({"diff", "--cached", "--no-ext-diff", "--no-textconv", "HEAD", "--", ".",
                 ":(exclude).platypus", ":(exclude).git"});
 }
-Result<std::string> SnapshotManager::write(const std::string &path, const std::string &content) {
+Result<std::string> SnapshotStore::write(const std::string &path, const std::string &content) {
     auto resolved = resolve(path);
     if (!resolved.is_ok())
         return Result<std::string>::fail(resolved.error());
@@ -216,7 +284,8 @@ Result<std::string> SnapshotManager::write(const std::string &path, const std::s
         if (!fs::is_directory(target.parent_path()))
             return Result<std::string>::fail("Parent directory does not exist");
         std::string old;
-        if (fs::exists(target)) {
+        bool existed = fs::exists(target);
+        if (existed) {
             if (!fs::is_regular_file(target))
                 return Result<std::string>::fail("Target is not a regular file");
             std::ifstream input(target, std::ios::binary);
@@ -245,13 +314,26 @@ Result<std::string> SnapshotManager::write(const std::string &path, const std::s
         }
         if (!confirm(preview))
             return Result<std::string>::fail("Permission denied");
-        auto saved = take_snapshot("Before writing " + path);
+        auto saved = snapshot("Before writing " + path);
         if (!saved.is_ok())
             return Result<std::string>::fail(saved.error());
         // Re-check after the approval callback, which can run arbitrary UI code.
         auto checked = resolve(path);
         if (!checked.is_ok() || checked.value() != target)
             return Result<std::string>::fail("Path changed during approval");
+        if (fs::exists(target) != existed)
+            return Result<std::string>::fail("File changed during approval; request a new diff");
+        if (existed) {
+            if (!fs::is_regular_file(target))
+                return Result<std::string>::fail("File type changed during approval");
+            std::ifstream current(target, std::ios::binary);
+            if (!current)
+                return Result<std::string>::fail("Cannot re-read file after approval");
+            std::string content_now{std::istreambuf_iterator<char>(current), {}};
+            if (content_now != old)
+                return Result<std::string>::fail(
+                    "File changed during approval; request a new diff");
+        }
         auto temporary = target;
         temporary += ".platypus-tmp";
         if (fs::exists(temporary) || fs::is_symlink(temporary))
@@ -273,21 +355,28 @@ Result<std::string> SnapshotManager::write(const std::string &path, const std::s
         return Result<std::string>::fail(e.what());
     }
 }
-Result<bool> SnapshotManager::rollback(const std::string &) {
+Result<bool> SnapshotStore::restore(const SnapshotId &revision) {
     try {
+        if (!valid_id(revision))
+            return Result<bool>::fail("Invalid snapshot ID");
+        auto available = list();
+        if (!available.is_ok())
+            return Result<bool>::fail(available.error());
+        if (std::find(available.value().begin(), available.value().end(), revision) ==
+            available.value().end())
+            return Result<bool>::fail("Snapshot ID is not available in this workspace");
+        auto target_modes = load_modes(root_, revision);
         auto stack = undo_stack(root_);
-        if (stack.empty())
-            return Result<bool>::fail("No snapshot available");
-        auto revision = stack.back().get<std::string>();
         auto staged =
             git({"add", "--all", "--force", "--", ".", ":(exclude).git", ":(exclude).platypus"});
         if (!staged.is_ok())
             return Result<bool>::fail(staged.error());
+        auto current_tree = git({"write-tree"});
+        if (!current_tree.is_ok())
+            return Result<bool>::fail(current_tree.error());
         auto diff = git({"diff", "--cached", "--no-ext-diff", "--no-textconv", "-R", revision});
         if (!diff.is_ok())
             return Result<bool>::fail(diff.error());
-        std::ifstream stored(root_ / ".platypus/snapshot-modes" / (revision + ".json"));
-        auto target_modes = nlohmann::json::parse(stored);
         auto current_modes = capture_modes(root_);
         std::string metadata_preview;
         for (const auto &group : {"files", "directories"}) {
@@ -304,27 +393,32 @@ Result<bool> SnapshotManager::rollback(const std::string &) {
         }
         if (!confirm("Restore snapshot?\n" + diff.value() + metadata_preview))
             return Result<bool>::fail("Permission denied");
-        auto backup = take_snapshot("Before undo");
+        auto checked =
+            git({"add", "--all", "--force", "--", ".", ":(exclude).git", ":(exclude).platypus"});
+        if (!checked.is_ok())
+            return Result<bool>::fail(checked.error());
+        auto checked_tree = git({"write-tree"});
+        if (!checked_tree.is_ok())
+            return Result<bool>::fail(checked_tree.error());
+        if (checked_tree.value() != current_tree.value() || capture_modes(root_) != current_modes)
+            return Result<bool>::fail(
+                "Workspace changed during approval; request a new restore diff");
+        auto backup = snapshot("Before restoring " + revision);
         if (!backup.is_ok())
-            return backup;
+            return Result<bool>::fail(backup.error());
         auto restored = git({"read-tree", "--reset", "-u", revision});
         if (restored.is_ok()) {
             try {
-                restore_modes(root_, revision);
+                restore_modes(root_, target_modes);
             } catch (const std::exception &e) {
                 restored = Result<std::string>::fail(e.what());
             }
         }
         if (!restored.is_ok()) {
-            auto recovery = git({"read-tree", "--reset", "-u", "HEAD"});
+            auto recovery = git({"read-tree", "--reset", "-u", backup.value()});
             if (recovery.is_ok()) {
-                auto backup_revision = git({"rev-parse", "HEAD"});
                 try {
-                    if (!backup_revision.is_ok())
-                        throw std::runtime_error(backup_revision.error());
-                    auto id = backup_revision.value();
-                    id.erase(id.find_last_not_of("\r\n") + 1);
-                    restore_modes(root_, id);
+                    restore_modes(root_, load_modes(root_, backup.value()));
                 } catch (const std::exception &e) {
                     recovery = Result<std::string>::fail(e.what());
                 }
@@ -337,11 +431,23 @@ Result<bool> SnapshotManager::rollback(const std::string &) {
         auto recorded = git({"commit", "--quiet", "--allow-empty", "-m", "Undo"});
         if (!recorded.is_ok())
             return Result<bool>::fail(recorded.error());
-        stack.erase(stack.size() - 1);
-        save_stack(root_, stack);
         return Result<bool>::ok(true);
     } catch (const std::exception &e) {
         return Result<bool>::fail(e.what());
     }
 }
-} // namespace platypus::util
+Result<bool> SnapshotStore::rollback(const std::string &) try {
+    auto stack = undo_stack(root_);
+    if (stack.empty())
+        return Result<bool>::fail("No snapshot available");
+    auto restored = restore(stack.back().get<SnapshotId>());
+    if (!restored.is_ok())
+        return restored;
+    // Explicit restore keeps its backup for undo; ordinary undo consumes the original stack entry.
+    stack.erase(stack.size() - 1);
+    save_stack(root_, stack);
+    return Result<bool>::ok(true);
+} catch (const std::exception &error) {
+    return Result<bool>::fail(error.what());
+}
+} // namespace platypus::safety

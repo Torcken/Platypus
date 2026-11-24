@@ -26,7 +26,7 @@ std::string read_text(const fs::path &path) {
         throw std::runtime_error("Cannot read " + path.string());
     return {std::istreambuf_iterator<char>(input), {}};
 }
-std::vector<fs::path> entries(util::SnapshotManager &sm, const std::string &path, bool recursive) {
+std::vector<fs::path> entries(safety::SnapshotStore &sm, const std::string &path, bool recursive) {
     auto resolved = sm.resolve(path);
     if (!resolved.is_ok())
         throw std::runtime_error(resolved.error());
@@ -238,7 +238,7 @@ void register_shell_tools(ToolRegistry &registry) {
                             " bytes\n";
              if (!sm.confirm(preview))
                  return Return::fail("Permission denied");
-             auto saved = sm.take_snapshot("Before command: " + command);
+             auto saved = sm.snapshot("Before command: " + command);
              if (!saved.is_ok())
                  return Return::fail(saved.error());
              std::ofstream log(sm.root() / ".platypus/actions.jsonl", std::ios::app);

@@ -3,7 +3,7 @@ project(platypus_util)
 
 add_library(util STATIC
     util.cpp
-    snapshot.cpp
+    ../safety/snapshot_store.cpp
     ../platform/process.cpp
 )
 

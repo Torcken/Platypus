@@ -217,7 +217,8 @@ phase-0 baseline at the same model and tier, and two weeks of real use with no l
 
 - [x] Durable shadow Git snapshots, approved diffs, undo, path containment and command confirmation.
 - [x] Append-only SQLite sessions and resume.
-- [ ] Broader restore-failure/concurrent-filesystem validation and API migration to SnapshotStore.
+- [x] SnapshotStore API, invalid/corrupt restore and recovery tests, approval-time change checks.
+- [ ] Broader filesystem failure/concurrency validation and sustained use without lost work.
 
 ## Phase 1d — TUI and bench adapter
 

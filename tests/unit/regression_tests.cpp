@@ -612,3 +612,143 @@ TEST_CASE("Read observations retain truncation status in the append-only session
         }
     REQUIRE(seen);
 }
+
+TEST_CASE("SnapshotStore lists durable IDs and restores an older ID with undo of the restore") {
+    Workspace workspace;
+    safety::SnapshotStore store(workspace.root, [](const auto &) { return true; });
+    REQUIRE(store.list().is_ok());
+    REQUIRE(store.list().value().empty());
+    REQUIRE_FALSE(fs::exists(workspace.root / ".platypus"));
+    std::ofstream(workspace.root / "file") << "one";
+    auto first = store.snapshot("first");
+    REQUIRE(first.is_ok());
+    std::ofstream(workspace.root / "file") << "two";
+    auto second = store.snapshot("second");
+    REQUIRE(second.is_ok());
+    REQUIRE(first.value() != second.value());
+    safety::SnapshotStore reconnected(workspace.root, [](const auto &) { return true; });
+    auto ids = reconnected.list();
+    REQUIRE(ids.is_ok());
+    REQUIRE(ids.value() == std::vector<safety::SnapshotId>{second.value(), first.value()});
+    std::ofstream(workspace.root / "file") << "three";
+    REQUIRE(reconnected.restore(first.value()).is_ok());
+    REQUIRE(read(workspace.root / "file") == "one");
+    REQUIRE(reconnected.rollback().is_ok());
+    REQUIRE(read(workspace.root / "file") == "three");
+}
+
+TEST_CASE("Invalid or denied snapshot restores do not change files or the undo stack") {
+    Workspace workspace;
+    safety::SnapshotStore store(workspace.root);
+    REQUIRE_FALSE(store.resolve(std::string("file\0ignored", 12)).is_ok());
+    std::ofstream(workspace.root / "file") << "before";
+    auto id = store.snapshot("before");
+    REQUIRE(id.is_ok());
+    std::ofstream(workspace.root / "file") << "current";
+    auto stack = read(workspace.root / ".platypus/undo.json");
+    for (const auto &invalid : {std::string("HEAD"), std::string("--all"), std::string("../escape"),
+                                std::string(40, 'f')})
+        REQUIRE_FALSE(store.restore(invalid).is_ok());
+    REQUIRE(store.restore(id.value()).error() == "Permission denied");
+    REQUIRE(read(workspace.root / "file") == "current");
+    REQUIRE(read(workspace.root / ".platypus/undo.json") == stack);
+}
+
+TEST_CASE("Unsafe snapshot manifests are refused before approval or workspace mutation") {
+    Workspace workspace;
+    int approvals = 0;
+    safety::SnapshotStore store(workspace.root, [&](const auto &) {
+        ++approvals;
+        return true;
+    });
+    std::ofstream(workspace.root / "file") << "before";
+    auto id = store.snapshot("before");
+    REQUIRE(id.is_ok());
+    std::ofstream(workspace.root / "file") << "current";
+    auto manifest = workspace.root / ".platypus/snapshot-modes" / (id.value() + ".json");
+    for (const auto &invalid :
+         {nlohmann::json{{"files", {{"../escape", 0644}}},
+                         {"directories", nlohmann::json::object()}},
+          nlohmann::json{{"files", {{".git/config", 0644}}},
+                         {"directories", nlohmann::json::object()}},
+          nlohmann::json{{"files", {{"file", -1}}}, {"directories", nlohmann::json::object()}},
+          nlohmann::json{{"files", {{"file", 65536}}}, {"directories", nlohmann::json::object()}},
+          nlohmann::json{{"files", false}, {"directories", nlohmann::json::object()}}}) {
+        std::ofstream(manifest) << invalid.dump();
+        REQUIRE_FALSE(store.restore(id.value()).is_ok());
+        REQUIRE(read(workspace.root / "file") == "current");
+    }
+    fs::remove(manifest);
+    auto outside = workspace.root / "outside-metadata";
+    std::ofstream(outside) << "private";
+    fs::create_symlink(outside, manifest);
+    REQUIRE_FALSE(store.restore(id.value()).is_ok());
+    REQUIRE(read(outside) == "private");
+    REQUIRE(approvals == 0);
+}
+
+TEST_CASE("Writes refuse changes made to the file during approval") {
+    for (bool initially_present : {false, true}) {
+        Workspace workspace;
+        if (initially_present)
+            std::ofstream(workspace.root / "file") << "before";
+        safety::SnapshotStore store(workspace.root, [&](const auto &) {
+            std::ofstream(workspace.root / "file") << "external change";
+            return true;
+        });
+        auto result = store.write("file", "model replacement");
+        REQUIRE_FALSE(result.is_ok());
+        REQUIRE(result.error().find("changed during approval") != std::string::npos);
+        REQUIRE(read(workspace.root / "file") == "external change");
+    }
+}
+
+TEST_CASE("Restore refuses content and empty-directory changes made during approval") {
+    for (bool directory_change : {false, true}) {
+        Workspace workspace;
+        std::ofstream(workspace.root / "file") << "before";
+        safety::SnapshotStore store(workspace.root, [&](const auto &) {
+            if (directory_change)
+                fs::create_directory(workspace.root / "external-empty");
+            else
+                std::ofstream(workspace.root / "file") << "external change";
+            return true;
+        });
+        auto id = store.snapshot("before");
+        REQUIRE(id.is_ok());
+        std::ofstream(workspace.root / "file") << "current";
+        auto stack = read(workspace.root / ".platypus/undo.json");
+        auto result = store.restore(id.value());
+        REQUIRE_FALSE(result.is_ok());
+        REQUIRE(result.error().find("Workspace changed during approval") != std::string::npos);
+        REQUIRE(read(workspace.root / ".platypus/undo.json") == stack);
+        REQUIRE(read(workspace.root / "file") ==
+                (directory_change ? "current" : "external change"));
+        if (directory_change)
+            REQUIRE(fs::is_directory(workspace.root / "external-empty"));
+    }
+}
+
+TEST_CASE("A failed metadata restore recovers original content and retains the undo stack") {
+    Workspace workspace;
+    std::ofstream(workspace.root / "file") << "before";
+    safety::SnapshotStore store(workspace.root, [](const auto &) { return true; });
+    auto id = store.snapshot("before");
+    REQUIRE(id.is_ok());
+    std::ofstream(workspace.root / "file") << "current";
+    std::ofstream(workspace.root / "extra") << "keep this";
+    fs::create_directory(workspace.root / "empty");
+    auto manifest = workspace.root / ".platypus/snapshot-modes" / (id.value() + ".json");
+    auto modes = nlohmann::json::parse(read(manifest));
+    // Structurally valid but inconsistent with the Git tree: exercise failure after read-tree.
+    modes["files"]["nonexistent"] = 0644;
+    std::ofstream(manifest) << modes.dump();
+    auto stack = read(workspace.root / ".platypus/undo.json");
+    auto restored = store.restore(id.value());
+    REQUIRE_FALSE(restored.is_ok());
+    REQUIRE(restored.error().find("original state restored") != std::string::npos);
+    REQUIRE(read(workspace.root / "file") == "current");
+    REQUIRE(read(workspace.root / "extra") == "keep this");
+    REQUIRE(fs::is_directory(workspace.root / "empty"));
+    REQUIRE(read(workspace.root / ".platypus/undo.json") == stack);
+}

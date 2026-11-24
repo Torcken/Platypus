@@ -14,7 +14,7 @@ flowchart LR
     C --> B
     E --> T[tools::ToolRegistry / six tools]
     E --> S[SQLite session log]
-    T --> A[SnapshotManager / approvals]
+    T --> A[safety::SnapshotStore / approvals]
     A --> G[shadow Git snapshots]
     T --> P[platform process groups]
 ```
@@ -32,6 +32,9 @@ usage values through a worker callback. Legacy explicit compaction is never call
 Mutations show a diff and require approval, then commit a full workspace snapshot in the shadow
 repository. The user's `.git/` is excluded. `--yes` authorizes one invocation and logs approved
 actions. Undo previews the full restore, saves recovery state, and walks a durable undo stack.
+Snapshot IDs can be listed and restored internally; a restore retains its prior state for undo.
+Validated manifests preserve permissions and empty directories. Stale approval previews are refused,
+and failed restore application attempts recovery from the captured prior state.
 Approved shell commands run in their own process group with a deadline and bounded output;
 cancellation kills descendants. Shell commands remain intentionally powerful after approval.
 
@@ -41,7 +44,7 @@ wakes the UI with PostEvent, and waits on a cancellable condition variable for a
 
 Start reading `src/main.cpp`, then `src/core/execution_engine.cpp`,
 `src/agent/context_manager.cpp`, `src/tools/builtins.cpp`, `src/tools/tool.cpp`, and
-`src/util/snapshot.cpp`. Tests in `tests/unit/regression_tests.cpp` cover the audit findings;
+`src/safety/snapshot_store.cpp`. Tests in `tests/unit/regression_tests.cpp` cover the audit findings;
 `tests/integration/test_cli.py` exercises the executable through a real loopback HTTP fixture.
 
 The standard-library Python benchmark launches subprocesses in disposable repositories and an

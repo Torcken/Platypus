@@ -8,7 +8,7 @@
 - [x] Canonical agent::ContextManager budgets rendered prompts, reserves replies and rejects
   overflow without changing history; tokenizer failures stop generation (ADR-012).
 - [ ] EditFormat interface and unambiguous fuzzy edit implementation selected by benchmark evidence.
-- [ ] Fuzz targets, ripgrep-backed search and remaining canonical Tool/ToolResult migration.
+- [ ] Fuzz targets and ripgrep-backed search.
 - [x] Per-profile token/context status with tokenizer counts or explicit estimate labels.
 - [x] Canonical tools::Tool/ToolResult/ToolContext; registry/built-ins in src/tools/;
   bounded UTF-8 success/error observations with persisted truncation flags (ADR-013).

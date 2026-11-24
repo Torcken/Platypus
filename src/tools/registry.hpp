@@ -20,9 +20,9 @@ namespace platypus::tools {
 class ToolRegistry {
   public:
     explicit ToolRegistry(std::filesystem::path root = std::filesystem::current_path(),
-                          util::SnapshotManager::Confirmer confirmer = {})
+                          safety::SnapshotStore::Confirmer confirmer = {})
         : snapshots_(std::move(root), std::move(confirmer)) {}
-    util::SnapshotManager &snapshots() { return snapshots_; }
+    safety::SnapshotStore &snapshots() { return snapshots_; }
     /// Execute through the canonical API, retaining explicit error/truncation flags.
     tools::ToolResult execute_tool(const std::string &name, const nlohmann::json &args) {
         auto tool = get_tool(name);
@@ -75,7 +75,7 @@ class ToolRegistry {
 
   private:
     std::map<std::string, Tool> tools_;
-    util::SnapshotManager snapshots_;
+    safety::SnapshotStore snapshots_;
 };
 
 // Tool Registration Functions
