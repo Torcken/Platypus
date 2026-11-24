@@ -42,3 +42,21 @@ within each repeat (`--seed`, default 42). Tier calibration remains a manual pro
 Use `python3 bench/fetch.py TASK_ID` explicitly for trusted HTTPS task repositories with a pinned
 commit. The runner itself never fetches. No raw recordings or private project content should be
 committed without human review.
+
+## Baseline provenance gate
+
+Add `--baseline` to both the runner and report command to require complete protocol metadata.
+Provide `model_file` and `server_binary` paths: the runner hashes these files incrementally and
+checks any supplied `model_file_sha256` / `server_binary_sha256`. It resolves and hashes the client
+executable and checks `--version`. Missing metadata is allowed in exploratory mode; hash or version
+mismatches always fail. Fixture runs cannot be published as a baseline.
+
+Required metadata includes `model`, `quantization`, `hardware_tier`, `hardware_description`,
+`hardware_os`, `context_size`, `gpu_layers`, `cache_type_k`, `cache_type_v`, nonnegative fixed `seed`,
+nonempty `sampling` with a finite `temperature`, `llama_cpp_tag`, `llama_cpp_commit`,
+`server_build_backend`, `server_version`, and `server_launch_args` as a JSON argv array.
+Use `clients` overrides for client-specific `executable`, `client_version`, and `label` values.
+Server/model/client SHA-256 fields are filled by artifact checks. Use distinct labels for distinct
+configurations; paired comparisons reject changes to task sets, model, hardware or serving settings.
+Local artifact checks cannot verify the binary actually running at a remote endpoint. The operator
+must still check serving settings and hardware, then freeze the tasks before baseline measurement.

@@ -18,5 +18,5 @@ class AiderClient:
         """Return a noninteractive command targeting the recording proxy."""
         env["OPENAI_API_BASE"] = self.proxy_url + "/v1"
         env["OPENAI_API_KEY"] = "local-no-secret"
-        return ["aider", "--model", "openai/" + config.get("model", "local"),
+        return [config.get("executable", "aider"), "--model", "openai/" + config.get("model", "local"),
                 "--yes-always", "--no-auto-commits", "--no-check-update", "--message", instruction]

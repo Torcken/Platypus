@@ -52,6 +52,11 @@ class TestRunner(unittest.TestCase):
         self.assertEqual(len(self.runner.output.read_text().splitlines()), 2)
         self.assertEqual(results[0]["task_commit"], results[1]["task_commit"])
 
+    def test_fixture_runs_cannot_be_published_as_baselines(self):
+        with self.assertRaisesRegex(ValueError, "Baseline metadata incomplete"):
+            self.runner.run_task("example", "fake", {}, repeats=1, baseline=True)
+        self.assertFalse(self.runner.output.exists())
+
     def test_run_task_unknown_client(self):
         with self.assertRaisesRegex(ValueError, "Unknown client: invalid_client"):
             self.runner.run_task("example", "invalid_client", {})

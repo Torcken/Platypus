@@ -10,7 +10,8 @@ Status: implementation substantially restored; human exit criterion remains pend
 - [x] Wilson reporting, paired per-task bootstrap, null/n/a handling.
 - [x] Full CPU-only pipeline test: runner → proxy → fake server/client → verifier → JSONL → report.
 - [x] Excluded warm-ups and seeded task/client randomization for matrix runs.
-- [ ] Enforce complete, verified reproducibility metadata for real-model baseline publication.
+- [x] Gate baseline publication on complete metadata, checked local artifact hashes/client version,
+  matching task sets and compatible serving settings (ADR-009). Remote serving facts remain human-verified.
 - [ ] Verify real client/server compatibility, sampling propagation and all source timing semantics.
 - [ ] Human: supply fifteen project tasks and produce the real-model baseline report.
 

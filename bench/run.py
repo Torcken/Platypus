@@ -24,6 +24,7 @@ from bench.adapters.opencode import OpenCodeClient
 from bench.adapters.aider import AiderClient
 from bench.adapters.fake import FakeClient
 from bench.adapters.platypus import PlatypusClient
+from bench.metadata import collect_artifacts, configuration_for_client, metadata_errors
 from bench.metrics import compute_metrics
 from bench.proxy import ProxyServer
 
@@ -79,12 +80,14 @@ class Runner:
         return task, directory
 
     def run_task(self, task_id: str, client_name: str, model_config: dict[str, Any],
-                 repeats: int = 3, repeat_start: int = 1, warmup: bool = False) -> list[dict[str, Any]]:
+                 repeats: int = 3, repeat_start: int = 1, warmup: bool = False,
+                 baseline: bool = False) -> list[dict[str, Any]]:
         """Run repeated fresh copies, record measured metrics, and continue after client failure."""
         if client_name not in self.clients:
             raise ValueError(f"Unknown client: {client_name}")
         if repeats < 1:
             raise ValueError("repeats must be positive")
+        model_config = configuration_for_client(model_config, client_name)
         task, directory = self._task(task_id)
         source = task["repository"]
         repository = (self.root / source).resolve()
@@ -120,9 +123,23 @@ class Runner:
                 commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=workspace, env=env, text=True).strip()
                 proxy = ProxyServer(model_config.get("endpoint", self.proxy_url), str(temporary / "recordings"), model_config.get("secret_patterns"))
                 url = proxy.start()
-                adapter = self.clients[client_name](url)
-                config = dict(model_config)
-                argv = adapter.command(task["instruction"], workspace, config, home, env)
+                try:
+                    adapter = self.clients[client_name](url)
+                    config = dict(model_config)
+                    argv = adapter.command(task["instruction"], workspace, config, home, env)
+                    executable = shutil.which(argv[0], path=env["PATH"])
+                    version = None
+                    if client_name != "fake" and executable:
+                        version_check = run_process([executable, "--version"], home, env, 10)
+                        if version_check["exit_code"] == 0:
+                            version = version_check.get("output", "").strip()
+                    config = collect_artifacts(config, executable if client_name != "fake" else None, version)
+                    errors = metadata_errors(config) if client_name != "fake" else ["fixture client"]
+                    if baseline and errors:
+                        raise ValueError("Baseline metadata incomplete: " + "; ".join(errors))
+                except Exception:
+                    proxy.stop()
+                    raise
                 timeout = float(task.get("timeout", 120))
                 started = datetime.now(timezone.utc).isoformat()
                 begin = time.monotonic()
@@ -139,12 +156,14 @@ class Runner:
                     shutil.copy2(proxy.recording, recording)
                 success = verification["exit_code"] == 0 and not client["timed_out"]
                 result = {
-                    "recording": str(recording), "task_id": task_id, "task_commit": task.get("commit") or commit,
+                    "metadata_status": "fixture" if client_name == "fake" else ("complete" if not errors else "incomplete"),
+                    "metadata_errors": errors, "recording": str(recording), "task_id": task_id, "task_commit": task.get("commit") or commit,
                     "task_fixture_sha256": hashlib.sha256((directory / "task.toml").read_bytes() + (directory / "verify.sh").read_bytes()).hexdigest(),
                     "client": client_name, "client_version": config.get("client_version", "UNVERIFIED"),
                     "config": config, "model": config.get("model", "unspecified"),
                     "hardware_tier": config.get("hardware_tier", "unspecified"),
-                    "hardware_os": platform.platform(), "timeout": timeout, "repeat": repeat,
+                    "hardware_os": config.get("hardware_os", platform.platform()),
+                    "runner_os": platform.platform(), "timeout": timeout, "repeat": repeat,
                     "started_at": started, "warmup": warmup, "isolated": True, "isolation": "disposable workspace and HOME; not a security sandbox",
                     "status": "success" if success else "failure", "success": success,
                     "wall_time_s": wall_time, "client_exit_code": client["exit_code"],
@@ -161,14 +180,15 @@ class Runner:
 
 
     def run_matrix(self, tasks: list[str], clients: list[str], config: dict[str, Any],
-                   repeats: int = 3, warmups: int = 1, seed: int = 42) -> list[dict[str, Any]]:
+                   repeats: int = 3, warmups: int = 1, seed: int = 42,
+                   baseline: bool = False) -> list[dict[str, Any]]:
         """Warm each task/client pair, then randomize pair order independently in every repeat."""
         if repeats < 1 or warmups < 0:
             raise ValueError("Expected positive repeats and nonnegative warmups")
         pairs = [(task, client) for task in tasks for client in clients]
         for task, client in pairs:
             if warmups:
-                self.run_task(task, client, config, repeats=warmups, warmup=True)
+                self.run_task(task, client, config, repeats=warmups, warmup=True, baseline=baseline)
         generator = random.Random(seed)
         results = []
         for repeat in range(1, repeats + 1):
@@ -176,7 +196,7 @@ class Runner:
             generator.shuffle(order)
             for task, client in order:
                 results.extend(self.run_task(task, client, dict(config, order_seed=seed),
-                                             repeats=1, repeat_start=repeat))
+                                             repeats=1, repeat_start=repeat, baseline=baseline))
         return results
 
 
@@ -189,10 +209,11 @@ if __name__ == "__main__":
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--baseline", action="store_true", help="Require complete metadata and checked artifacts")
     parser.add_argument("--config", type=Path, help="JSON reproducibility metadata and model settings")
     parser.add_argument("--output", type=Path)
     arguments = parser.parse_args()
     config = json.loads(arguments.config.read_text()) if arguments.config else {}
     config["model"] = arguments.model
     print(json.dumps(Runner(arguments.endpoint, output=arguments.output).run_matrix(
-        arguments.task, arguments.client, config, arguments.repeats, arguments.warmups, arguments.seed), indent=2))
+        arguments.task, arguments.client, config, arguments.repeats, arguments.warmups, arguments.seed, arguments.baseline), indent=2))

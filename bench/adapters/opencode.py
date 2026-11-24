@@ -28,5 +28,5 @@ class OpenCodeClient:
         location = home / ".config/opencode/opencode.json"
         location.parent.mkdir(parents=True, exist_ok=True)
         location.write_text(json.dumps(settings), encoding="utf-8")
-        return ["opencode", "run", "--pure", "--auto", "--format", "json",
+        return [config.get("executable", "opencode"), "run", "--pure", "--auto", "--format", "json",
                 "--model", "platypus/" + model, "--dir", str(repo), instruction]

@@ -19,6 +19,8 @@ empty-directory undo tests. Python: 23/23 passed.
 Formatting and whitespace checks passed. A scoped clang-tidy run found outstanding diagnostics.
 See phase-stabilization-report.md for exact commands, deviations and manual test protocol.
 
-Next concrete work: complete baseline metadata enforcement, native tool-history/profile checks,
+Next concrete work: native tool-history/profile checks,
 fuzz/edit interfaces, and obtain a verified model/server for real measurements.
 No measured model gain, macOS/GPU compatibility, sustained-use result or v1.0 readiness is claimed.
+
+Continuation: baseline provenance/comparison gates implemented (ADR-009); 32 Python tests passed.
