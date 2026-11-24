@@ -221,3 +221,28 @@ TEST_CASE("Undo restores empty directories and removes new empty directories") {
     REQUIRE(fs::is_directory(workspace.root / "original-empty"));
     REQUIRE_FALSE(fs::exists(workspace.root / "new-empty"));
 }
+
+TEST_CASE("FakeBackend replays Phase 0 JSONL recordings and rejects malformed input") {
+    Workspace workspace;
+    auto file = workspace.root / "recording.jsonl";
+    std::ofstream output(file);
+    output << nlohmann::json{{"endpoint", "/health"}, {"response", {{"status", "ok"}}}}.dump()
+           << '\n';
+    output
+        << nlohmann::json{{"endpoint", "/completion"}, {"response", {{"content", "First"}}}}.dump()
+        << '\n';
+    output << nlohmann::json{{"endpoint", "/v1/chat/completions"},
+                             {"response",
+                              {{"choices",
+                                nlohmann::json::array({{{"message", {{"content", "Second"}}}}})}}}}
+                  .dump()
+           << '\n';
+    output.close();
+    llm::FakeBackend backend;
+    REQUIRE(backend.load_recording(file.string()).is_ok());
+    REQUIRE(backend.generate_chat({{"user", "query"}}).value()[0].content == "First");
+    REQUIRE(backend.generate_chat({{"user", "query"}}).value()[0].content == "Second");
+    REQUIRE_FALSE(backend.generate_chat({{"user", "query"}}).is_ok());
+    std::ofstream(file) << "invalid";
+    REQUIRE_FALSE(backend.load_recording(file.string()).is_ok());
+}

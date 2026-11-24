@@ -19,6 +19,9 @@ class FakeBackend : public LlmBackend {
 
     // Allows setting a scripted sequence of responses for a specific task/prompt.
     // Each response can be a plain string or a JSON tool call.
+    /// Load reviewed Phase 0 JSONL completion records as a deterministic response sequence.
+    util::Result<util::Void> load_recording(const std::string &path);
+
     void set_script(const std::string &key, const std::vector<std::string> &responses);
 
     util::Result<std::vector<ChatChunk>>
@@ -34,6 +37,7 @@ class FakeBackend : public LlmBackend {
     std::map<std::string, std::vector<std::string>> scripts_;
     // Keeps track of which turn we are on for each task key
     std::map<std::string, size_t> turn_counters_;
+    bool strict_recording_ = false;
 };
 
 } // namespace platypus::llm

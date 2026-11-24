@@ -2,6 +2,8 @@
 #include "../util/logger.hpp"
 #include <algorithm>
 #include <chrono>
+#include <fstream>
+#include <nlohmann/json.hpp>
 #include <thread>
 
 namespace platypus::llm {
@@ -11,6 +13,48 @@ FakeBackend::FakeBackend() {
     scripts_["hello"] = {"Hello! How can I help you today?"};
 }
 
+util::Result<util::Void> FakeBackend::load_recording(const std::string &path) {
+    using Return = util::Result<util::Void>;
+    try {
+        std::ifstream input(path);
+        if (!input)
+            return Return::fail("Cannot open recording: " + path);
+        std::vector<std::string> responses;
+        std::string line;
+        while (std::getline(input, line)) {
+            if (line.empty())
+                continue;
+            auto record = nlohmann::json::parse(line);
+            auto endpoint = record.at("endpoint").get<std::string>();
+            if (endpoint != "/completion" && endpoint != "/v1/completions" &&
+                endpoint != "/v1/chat/completions")
+                continue;
+            const auto &response = record.at("response");
+            if (response.contains("choices")) {
+                auto choice = response.at("choices").at(0);
+                if (choice.contains("message")) {
+                    auto message = choice.at("message");
+                    if (message.contains("tool_calls"))
+                        responses.push_back(
+                            nlohmann::json{{"tool_calls", message.at("tool_calls")}}.dump());
+                    else
+                        responses.push_back(message.at("content").get<std::string>());
+                } else
+                    responses.push_back(choice.at("text").get<std::string>());
+            } else
+                responses.push_back(response.at("content").get<std::string>());
+        }
+        if (responses.empty())
+            return Return::fail("Recording has no completion responses");
+        scripts_.clear();
+        turn_counters_.clear();
+        set_script("", responses);
+        strict_recording_ = true;
+        return Return::ok();
+    } catch (const std::exception &e) {
+        return Return::fail(std::string("Invalid recording: ") + e.what());
+    }
+}
 void FakeBackend::set_script(const std::string &key, const std::vector<std::string> &responses) {
     scripts_[key] = responses;
     turn_counters_[key] = 0;
@@ -34,6 +78,8 @@ FakeBackend::generate_chat(const std::vector<std::pair<std::string, std::string>
                 if (turn < script.size()) {
                     response_text = script[turn];
                     turn_counters_[key]++;
+                } else if (strict_recording_) {
+                    return util::Result<std::vector<ChatChunk>>::fail("Recording exhausted");
                 }
                 break;
             }
@@ -64,6 +110,8 @@ FakeBackend::stream_chat(const std::vector<std::pair<std::string, std::string>> 
                 if (turn < script.size()) {
                     response_text = script[turn];
                     turn_counters_[key]++;
+                } else if (strict_recording_) {
+                    return util::Result<util::Void>::fail("Recording exhausted");
                 }
                 break;
             }
