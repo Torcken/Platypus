@@ -29,7 +29,7 @@ class TestEditFormats(unittest.TestCase):
         self.assertNotIn("original content", content)
 
     def test_apply_search_replace_not_found(self):
-        # Should still return True (or handle gracefully) and print warning
+        # A missing search must fail without mutating the source.
         edits = [
             {
                 "old_string": "non_existent",
@@ -37,7 +37,9 @@ class TestEditFormats(unittest.TestCase):
             }
         ]
         result = apply_search_replace(self.test_file, edits)
-        self.assertTrue(result)
+        self.assertFalse(result)
+        with open(self.test_file) as source:
+            self.assertIn("original content", source.read())
 
     def test_verify_file_content_success(self):
         expected = "new content\nline 2\nline 3"

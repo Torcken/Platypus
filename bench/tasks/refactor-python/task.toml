@@ -1,0 +1,4 @@
+repository = "repos/refactor-python"
+instruction = "Extract the repeated double calculation into double(value), preserving calculate behavior."
+category = "refactor"
+timeout = 60

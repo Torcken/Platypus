@@ -1,0 +1,1 @@
+Add a double(value) function after the constant.

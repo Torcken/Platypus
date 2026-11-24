@@ -1,0 +1,4 @@
+repository = "repos/tests-python"
+instruction = "Write test_calc.py using unittest. Cover positive, negative, and zero values for double()."
+category = "test_writing"
+timeout = 60

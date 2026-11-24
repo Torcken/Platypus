@@ -1,0 +1,4 @@
+repository = "repos/bug-python"
+instruction = "Fix add() to add rather than subtract."
+category = "bug_fix"
+timeout = 60

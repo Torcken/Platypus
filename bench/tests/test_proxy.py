@@ -1,3 +1,4 @@
+import tempfile
 import unittest
 import json
 import os
@@ -8,22 +9,15 @@ from urllib.error import HTTPError
 class TestProxy(unittest.TestCase):
     def setUp(self):
         self.target_url = "http://localhost:8080"
-        self.output_dir = "bench/results"
+        self.temporary = tempfile.TemporaryDirectory()
+        self.output_dir = self.temporary.name
         # Ensure output dir exists for tests
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
         self.proxy = ProxyServer(self.target_url, self.output_dir)
 
     def tearDown(self):
-        # Cleanup created files
-        if os.path.exists(self.output_dir):
-            for filename in os.listdir(self.output_dir):
-                file_path = os.path.join(self.output_dir, filename)
-                if os.path.isfile(file_path):
-                    try:
-                        os.remove(file_path)
-                    except OSError:
-                        pass
+        self.temporary.cleanup()
 
     @patch('urllib.request.urlopen')
     def test_handle_request_json(self, mock_urlopen):

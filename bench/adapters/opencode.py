@@ -1,62 +1,32 @@
-import subprocess
+"""OpenCode subprocess adapter; commands checked with the installed CLI help.
+
+Provider fields follow https://opencode.ai/docs/providers/ (2026-11-24).
+The real-model compatibility check remains a human phase-exit requirement.
+"""
+from __future__ import annotations
 import json
-import os
-from typing import List, Dict, Any
+from pathlib import Path
+from typing import Any
 
 class OpenCodeClient:
-    """
-    A client adapter for the 'opencode' tool.
-    It interacts with the tool to perform coding tasks and records
-    the interaction with the proxy.
-    """
+    """Configure a single local OpenAI-compatible provider in a disposable HOME."""
+    edit_tools = {"edit", "write", "apply_patch"}
+    error_pattern = r"(?i)(error|failed|not found)"
 
-    def __init__(self, proxy_url: str = "http://localhost:8000"):
+    def __init__(self, proxy_url: str = "http://127.0.0.1:8000"):
         self.proxy_url = proxy_url
 
-    def run_task(self, task_id: str, repo_path: str) -> Dict[str, Any]:
-        """
-        Runs a single task using the opencode tool.
-        """
-        # Load task definition
-        task_path = f"bench/tasks/{task_id}.json"
-        with open(task_path, 'r') as f:
-            task = json.load(f)
-
-        description = task['description']
-        prompt_prefix = task['client_config']['prompt_prefix']
-        
-        # This is a placeholder for the actual opencode CLI command
-        # In a real implementation, we would use subprocess to call 'opencode'
-        # and point it to our proxy.
-        
-        print(f"Running task {task_id} using opencode...")
-        
-        # Example of how the command might be constructed:
-        # command = [
-        #     "opencode",
-        #     "--model", "llama-cpp",
-        #     "--base-url", self.proxy_url,
-        #     "--repo", repo_path,
-        #     "--prompt", f"{prompt_prefix}{description}"
-        # ]
-        # result = subprocess.run(command, capture_output=True, text=True)
-
-        # For now, we return a dummy success
-        return {
-            "task_id": task_id,
-            "status": "success",
-            "wall_time_s": 10.5,
-            "turns": 3,
-            "prompt_tokens_total": 150,
-            "prompt_tokens_processed": 120,
-            "cache_hit_ratio": 0.2,
-            "prefill_ms": 200,
-            "invalid_tool_calls": 0,
-            "failed_edits": 0,
-            "loops": 0
-        }
-
-if __name__ == "__main__":
-    client = OpenCodeClient()
-    # Example run
-    # print(client.run_task("task_001_cpp_refactor", "bench/repos/cpp_refactor"))
+    def command(self, instruction: str, repo: Path, config: dict[str, Any],
+                home: Path, env: dict[str, str]) -> list[str]:
+        """Return argv and put provider configuration in the isolated user configuration."""
+        model = config.get("model", "local")
+        settings = {"model": "platypus/" + model, "providers": {"platypus": {
+            "name": "Local benchmark", "package": "@opencode/ai/providers/openai-compatible",
+            "settings": {"baseURL": self.proxy_url + "/v1"},
+            "models": {model: {"name": model}},
+        }}}
+        location = home / ".config/opencode/opencode.json"
+        location.parent.mkdir(parents=True, exist_ok=True)
+        location.write_text(json.dumps(settings), encoding="utf-8")
+        return ["opencode", "run", "--pure", "--auto", "--format", "json",
+                "--model", "platypus/" + model, "--dir", str(repo), instruction]

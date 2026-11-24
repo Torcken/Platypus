@@ -1,0 +1,1 @@
+Return only one JSON object with old_string and new_string. Example: {"old_string":"old", "new_string":"new"}. Choose a unique search block.

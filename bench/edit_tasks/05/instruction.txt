@@ -1,0 +1,1 @@
+Set retries to 3 and delay to 10.

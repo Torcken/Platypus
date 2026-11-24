@@ -1,0 +1,4 @@
+repository = "repos/multi-python"
+instruction = "Rename constant VALUE to DEFAULT_VALUE in config.py and update its import in app.py."
+category = "multi_file"
+timeout = 60

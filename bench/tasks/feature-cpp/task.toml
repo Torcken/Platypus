@@ -1,0 +1,4 @@
+repository = "repos/feature-cpp"
+instruction = "Add int square(int value) and make main verify square(7) is 49."
+category = "small_feature"
+timeout = 60

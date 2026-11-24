@@ -1,0 +1,6 @@
+Return only a unified diff for the supplied file. Example:
+--- a/file
++++ b/file
+@@ -1 +1 @@
+-old
++new
