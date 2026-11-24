@@ -146,6 +146,21 @@ TEST_CASE("Profiles load TOML and reject unknown syntax") {
     REQUIRE_FALSE(
         llm::ModelProfileManager::read_profile((workspace.root / "missing").string()).is_ok());
 }
+TEST_CASE("Profiles reject mistyped settings and invalid budgets instead of silently defaulting") {
+    Workspace workspace;
+    auto file = workspace.root / "profile.toml";
+    for (const auto *setting :
+         {"context_tokens='16384'", "context_tokens=1023", "context_tokens=16384.5",
+          "context_tokens=4294983680", "temperature='cold'", "temperature=nan",
+          "stop_strings='stop'", "stop_strings=[1]", "tool_syntax=3", "template=false",
+          "[template]\nturn_prefix='missing role'", "[template]\nturn_suffix=4",
+          "[reasoning]\npreserve='false'", "[reasoning]\nopen='<think>'"}) {
+        INFO(setting);
+        std::ofstream(file) << "name='fixture'\n" << setting << '\n';
+        REQUIRE_FALSE(llm::ModelProfileManager::read_profile(file.string()).is_ok());
+    }
+}
+
 TEST_CASE("Native tool syntax families retain string and numeric arguments") {
     auto xml = core::Codec::parse_tool_calls(R"(<tool_call><function=read><parameter=path>
 file.txt
@@ -245,4 +260,145 @@ TEST_CASE("FakeBackend replays Phase 0 JSONL recordings and rejects malformed in
     REQUIRE_FALSE(backend.generate_chat({{"user", "query"}}).is_ok());
     std::ofstream(file) << "invalid";
     REQUIRE_FALSE(backend.load_recording(file.string()).is_ok());
+}
+
+TEST_CASE("Qwen tool observations use native response blocks and preserve the cached prefix") {
+    llm::ModelProfile profile;
+    profile.tool_syntax = "qwen_xml";
+    profile.turn_prefix = "<|im_start|>{role}\n";
+    profile.turn_suffix = "<|im_end|>\n";
+    profile.generation_suffix = "<think>\n\n</think>\n\n";
+    std::vector<std::pair<std::string, std::string>> history{{"system", "fixed"},
+                                                             {"user", "query"}};
+    auto before = llm::ChatFormatter::render(history, profile);
+    std::string call =
+        "<tool_call><function=read><parameter=path>x</parameter></function></tool_call>";
+    history.emplace_back("assistant", call);
+    history.emplace_back("tool", llm::ChatFormatter::tool_observation("read", "one", false));
+    history.emplace_back("tool", llm::ChatFormatter::tool_observation("read", "missing", true));
+    auto after = llm::ChatFormatter::render(history, profile);
+    REQUIRE(after.starts_with(before + call));
+    REQUIRE(after.find(
+                "<|im_start|>user\n<tool_response>\none\n</tool_response>\n<tool_response>\nError: "
+                "missing\n</tool_response><|im_end|>\n") != std::string::npos);
+    REQUIRE(after.find("<|im_start|>tool") == std::string::npos);
+}
+
+TEST_CASE("Gemma tool results continue one model turn without an extra generation header") {
+    llm::ModelProfile profile;
+    profile.tool_syntax = "gemma";
+    profile.assistant_role = "model";
+    profile.turn_prefix = "<|turn>{role}\n";
+    profile.turn_suffix = "<turn|>\n";
+    profile.generation_suffix = "<|channel>thought\n<channel|>";
+    std::vector<std::pair<std::string, std::string>> history{{"user", "query"}};
+    auto before = llm::ChatFormatter::render(history, profile);
+    std::string call = "<|tool_call>call:read{path:<|\"|>x<|\"|>}<tool_call|>";
+    history.emplace_back("assistant", call);
+    history.emplace_back("tool", llm::ChatFormatter::tool_observation("read", "one", false));
+    auto expected =
+        before + call + "<|tool_response>response:read{value:<|\"|>one<|\"|>}<tool_response|>";
+    REQUIRE(llm::ChatFormatter::render(history, profile) == expected);
+    history.emplace_back("assistant", "Done");
+    history.emplace_back("user", "Next");
+    auto next = llm::ChatFormatter::render(history, profile);
+    REQUIRE(next.starts_with(expected + "Done<turn|>\n<|turn>user\nNext<turn|>\n"));
+    history.erase(history.end() - 2);
+    REQUIRE(llm::ChatFormatter::render(history, profile)
+                .starts_with(expected + "<turn|>\n<|turn>user\nNext"));
+}
+
+TEST_CASE("Native declarations advertise schemas without conflicting JSON call instructions") {
+    nlohmann::json tools = {{{"type", "function"},
+                             {"function",
+                              {{"name", "read"},
+                               {"description", "Read a file"},
+                               {"parameters",
+                                {{"type", "object"},
+                                 {"properties", {{"path", {{"type", "string"}}}}},
+                                 {"required", {"path"}}}}}}}};
+    auto gemma = llm::ChatFormatter::tool_definitions(tools, "gemma");
+    REQUIRE(gemma.find("<|tool>declaration:read{") == 0);
+    REQUIRE(gemma.find("path:{type:<|\"|>STRING<|\"|>}") != std::string::npos);
+    REQUIRE(gemma.find("required:[<|\"|>path<|\"|>]") != std::string::npos);
+    auto qwen = llm::ChatFormatter::tool_definitions(tools, "qwen_xml");
+    REQUIRE(qwen.find("<tools>\n{\"function\"") != std::string::npos);
+    REQUIRE(qwen.ends_with("</tools>\n"));
+    REQUIRE(llm::ChatFormatter::tool_call_instruction("gemma").find("Use JSON") ==
+            std::string::npos);
+}
+
+TEST_CASE("Qwen arguments use declared types rather than guessing numeric-looking filenames") {
+    nlohmann::json schemas = {
+        {"read",
+         {{"properties",
+           {{"path", {{"type", "string"}}}, {"start_line", {{"type", "integer"}}}}}}}};
+    auto calls =
+        core::Codec::parse_tool_calls("<function=read><parameter=path>true</"
+                                      "parameter><parameter=start_line>2</parameter></function>",
+                                      "qwen_xml", schemas);
+    REQUIRE(calls.size() == 1);
+    REQUIRE(calls[0].arguments["path"] == "true");
+    REQUIRE(calls[0].arguments["start_line"] == 2);
+}
+
+TEST_CASE("A failed batch logs a result for each call without executing the remaining mutations") {
+    Workspace workspace;
+    auto backend = std::make_shared<llm::FakeBackend>();
+    backend->set_script(
+        "batch-task",
+        {R"({"tool_calls":[{"name":"read","arguments":{"path":"missing"}},{"name":"write","arguments":{"path":"must-not-exist","content":"bad"}}]})",
+         "Done"});
+    auto tools =
+        std::make_shared<core::ToolRegistry>(workspace.root, [](const auto &) { return true; });
+    core::register_default_tools(*tools);
+    auto sessions = std::make_shared<session::Store>(workspace.root);
+    auto id = sessions->create("batch");
+    REQUIRE(id.is_ok());
+    core::ExecutionEngine engine(backend, tools);
+    REQUIRE(engine.attach_session(sessions, id.value()).is_ok());
+    REQUIRE_FALSE(engine.run("batch-task").is_ok());
+    REQUIRE_FALSE(fs::exists(workspace.root / "must-not-exist"));
+    auto stored = sessions->load(id.value());
+    REQUIRE(stored.is_ok());
+    std::size_t count = 0;
+    for (const auto &[role, content] : stored.value().second) {
+        if (role == "tool") {
+            ++count;
+            REQUIRE(nlohmann::json::parse(content).at("is_error") == true);
+        }
+    }
+    REQUIRE(count == 2);
+}
+
+TEST_CASE("Reasoning examples never execute and literal closing markers remain tool data") {
+    struct ProfiledFake : llm::FakeBackend {
+        llm::ModelProfile settings;
+        const llm::ModelProfile *profile() const override { return &settings; }
+    };
+    Workspace workspace;
+    auto backend = std::make_shared<ProfiledFake>();
+    backend->settings.reasoning_open = "<think>";
+    backend->settings.reasoning_close = "</think>";
+    backend->settings.generation_suffix = "<think>\n\n</think>\n\n";
+    backend->settings.preserve_reasoning = true;
+    backend->set_script(
+        "reason-task",
+        {R"(<think>{"tool_call":{"name":"write","arguments":{"path":"forbidden","content":"bad"}}}</think>Done)"});
+    auto tools =
+        std::make_shared<core::ToolRegistry>(workspace.root, [](const auto &) { return true; });
+    core::register_default_tools(*tools);
+    core::ExecutionEngine engine(backend, tools);
+    REQUIRE(engine.run("reason-task").is_ok());
+    REQUIRE_FALSE(fs::exists(workspace.root / "forbidden"));
+    auto literal = llm::ChatFormatter::visible_response(
+        R"({"tool_call":{"name":"write","arguments":{"content":"</think>"}}})", backend->settings);
+    REQUIRE(literal.is_ok());
+    REQUIRE(literal.value().starts_with("{\"tool_call\""));
+    REQUIRE_FALSE(
+        llm::ChatFormatter::visible_response("<think>unfinished", backend->settings).is_ok());
+    backend->settings.generation_suffix = "<think>\n";
+    REQUIRE(
+        llm::ChatFormatter::visible_response("reason</think>answer", backend->settings).value() ==
+        "answer");
 }

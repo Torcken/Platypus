@@ -73,10 +73,7 @@ util::Result<std::string> request(const std::string &url, const std::string *pay
     return Return::ok(state.body);
 }
 nlohmann::json messages_json(const std::vector<std::pair<std::string, std::string>> &messages) {
-    auto result = nlohmann::json::array();
-    for (const auto &[role, content] : messages)
-        result.push_back({{"role", role}, {"content", content}});
-    return result;
+    return nlohmann::json::parse(ChatFormatter::to_json(messages));
 }
 } // namespace
 LlamaServerBackend::LlamaServerBackend(std::string base_url) : base_url_(std::move(base_url)) {
@@ -163,7 +160,7 @@ LlamaServerBackend::stream_request(const std::string &endpoint, const std::strin
 util::Result<util::Void>
 LlamaServerBackend::stream_chat(const std::vector<std::pair<std::string, std::string>> &messages,
                                 float temperature, int max_tokens,
-                                std::function<void(const ChatChunk &)> callback) {
+                                std::function<void(const ChatChunk &)> callback) try {
     auto body = nlohmann::json{
         {"messages", messages_json(messages)},
         {"temperature", temperature},
@@ -196,5 +193,7 @@ LlamaServerBackend::stream_chat(const std::vector<std::pair<std::string, std::st
             callback({text, !choice.value("finish_reason", nlohmann::json(nullptr)).is_null(),
                       "assistant"});
         });
+} catch (const std::exception &e) {
+    return util::Result<util::Void>::fail(e.what());
 }
 } // namespace platypus::llm

@@ -5,7 +5,8 @@
 #include <regex>
 namespace platypus::core {
 std::vector<ToolCall> Codec::parse_tool_calls(const std::string &response,
-                                              const std::string &syntax) {
+                                              const std::string &syntax,
+                                              const nlohmann::json &schemas) {
     if (syntax == "qwen_xml") {
         std::vector<ToolCall> result;
         std::regex function(R"(<function=([A-Za-z_][A-Za-z_0-9]*)>([\s\S]*?)</function>)");
@@ -21,7 +22,14 @@ std::vector<ToolCall> Codec::parse_tool_calls(const std::string &response,
                     text.erase(0, 1);
                 if (text.ends_with('\n'))
                     text.pop_back();
-                auto value = nlohmann::json::parse(text, nullptr, false);
+                auto property = (*item)[1].str();
+                bool string_value = schemas.contains((*it)[1].str()) &&
+                                    schemas.at((*it)[1].str())
+                                            .value("properties", nlohmann::json::object())
+                                            .value(property, nlohmann::json::object())
+                                            .value("type", "") == "string";
+                auto value = string_value ? nlohmann::json(text)
+                                          : nlohmann::json::parse(text, nullptr, false);
                 args[(*item)[1].str()] = value.is_discarded() ? nlohmann::json(text) : value;
             }
             result.push_back({(*it)[1].str(), args});

@@ -24,3 +24,9 @@ fuzz/edit interfaces, and obtain a verified model/server for real measurements.
 No measured model gain, macOS/GPU compatibility, sustained-use result or v1.0 readiness is claimed.
 
 Continuation: baseline provenance/comparison gates implemented (ADR-009); 32 Python tests passed.
+
+Native history continuation (ADR-010): typed tool observations, native declarations and response
+frames, schema-aware XML strings, reasoning-safe execution and strict profile validation are
+implemented. CLI fixture sessions verify both native families and append-only prompt prefixes.
+Verification: configure/build/CTest for dev, ASan and UBSan each passed (9/9 CTest groups);
+`python3 -m unittest discover -s bench/tests -v` passed 32/32. Real models remain unverified.

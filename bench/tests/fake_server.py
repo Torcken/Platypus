@@ -6,7 +6,7 @@ import threading
 from typing import Iterator
 
 @contextmanager
-def fake_server(edit: dict[str, str] | None = None, responses: list[str] | None = None) -> Iterator[str]:
+def fake_server(edit: dict[str, str] | None = None, responses: list[str] | None = None, captured: list[dict] | None = None) -> Iterator[str]:
     """Yield a loopback endpoint returning a scripted file edit and known token timings."""
     edit = edit or {"path": "answer.txt", "content": "verified\n"}
     counter = 0
@@ -16,6 +16,15 @@ def fake_server(edit: dict[str, str] | None = None, responses: list[str] | None 
             pass
         def do_POST(self):
             request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            if captured is not None:
+                captured.append({"endpoint": self.path, "body": request})
+            if self.path == "/tokenize":
+                body = json.dumps({"tokens": list(range(10))}).encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             nonlocal counter
             with lock:
                 content = responses[min(counter, len(responses) - 1)] if responses else json.dumps(edit)
@@ -29,7 +38,8 @@ def fake_server(edit: dict[str, str] | None = None, responses: list[str] | None 
                 body += "data: [DONE]\r\n\r\n"
                 kind = "text/event-stream"
             else:
-                body = json.dumps({"choices": [{"message": {"content": content}}], "timings": timings})
+                body = json.dumps({"content": content, "timings": timings} if self.path == "/completion" else
+                                  {"choices": [{"message": {"content": content}}], "timings": timings})
                 kind = "application/json"
             body = body.encode()
             self.send_response(200)

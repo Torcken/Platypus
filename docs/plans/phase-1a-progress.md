@@ -4,6 +4,8 @@
 - [x] Actual libcurl HTTP/SSE, /completion, /health, /tokenize, stop-token cancellation.
 - [x] Validated TOML profiles and client-side role formatting; no model-name branches.
 - [x] Ornith/Gemma syntax parsing, reasoning policy, prefix-stability regression tests.
+- [x] Typed tool observations, native declarations/responses and CLI fixture sessions (ADR-010).
+- [x] Refuse invalid profile types, incomplete reasoning and non-finite sampling values.
 - [x] Joined generation/UI workers and platform-local bounded subprocess execution.
 - [x] Formatting configuration and Linux/macOS CI workflow written.
 - [ ] Run CI, especially macOS toolchain discovery; production clang-tidy cleanup remains.

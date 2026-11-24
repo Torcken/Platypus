@@ -26,8 +26,9 @@ class Codec {
      * @param response The raw string output from the LLM backend.
      * @return A vector of ToolCall objects.
      */
-    static std::vector<ToolCall> parse_tool_calls(const std::string &response,
-                                                  const std::string &syntax = "json_tagged");
+    static std::vector<ToolCall>
+    parse_tool_calls(const std::string &response, const std::string &syntax = "json_tagged",
+                     const nlohmann::json &schemas = nlohmann::json::object());
 
   private:
     static std::vector<ToolCall> parse_json(const std::string &json_str);
