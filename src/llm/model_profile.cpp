@@ -16,6 +16,8 @@ util::Result<ModelProfile> ModelProfileManager::read_profile(const std::string &
         for (const auto *key : {"template", "reasoning"})
             if (table.contains(key) && !table[key].is_table())
                 return Return::fail(std::string(key) + " must be a table");
+        if (table.contains("sampling") && !table["sampling"].is_table())
+            return Return::fail("sampling must be a table");
         for (const auto *key :
              {"turn_prefix", "turn_suffix", "assistant_role", "generation_suffix"})
             if (table["template"][key] && !table["template"][key].is_string())
@@ -49,6 +51,42 @@ util::Result<ModelProfile> ModelProfileManager::read_profile(const std::string &
         profile.reasoning_open = table["reasoning"]["open"].value_or(std::string{});
         profile.reasoning_close = table["reasoning"]["close"].value_or(std::string{});
         profile.preserve_reasoning = table["reasoning"]["preserve"].value_or(false);
+        if (auto sampling = table["sampling"].as_table()) {
+            for (const auto &[key, value] : *sampling) {
+                auto name = std::string(key.str());
+                if (name == "top_k") {
+                    auto number = value.value<std::int64_t>();
+                    if (!value.is_integer() || !number || *number < 0 || *number > 1000000)
+                        return Return::fail("sampling.top_k must be an integer in [0, 1000000]");
+                    profile.sampling[name] = *number;
+                } else if (name == "seed") {
+                    auto number = value.value<std::int64_t>();
+                    if (!value.is_integer() || !number || *number < -1 || *number > 4294967295LL)
+                        return Return::fail("sampling.seed must be an integer in [-1, 4294967295]");
+                    profile.sampling[name] = *number;
+                } else if (name == "top_p" || name == "min_p" || name == "typical_p") {
+                    auto number = value.value<double>();
+                    if (!value.is_number() || !number || !std::isfinite(*number) || *number < 0 ||
+                        *number > 1)
+                        return Return::fail("sampling." + name + " must be numeric in [0, 1]");
+                    profile.sampling[name] = *number;
+                } else if (name == "repeat_penalty") {
+                    auto number = value.value<double>();
+                    if (!value.is_number() || !number || !std::isfinite(*number) || *number < 0 ||
+                        *number > 10)
+                        return Return::fail("sampling.repeat_penalty must be numeric in [0, 10]");
+                    profile.sampling[name] = *number;
+                } else if (name == "presence_penalty" || name == "frequency_penalty") {
+                    auto number = value.value<double>();
+                    if (!value.is_number() || !number || !std::isfinite(*number) || *number < -2 ||
+                        *number > 2)
+                        return Return::fail("sampling." + name + " must be numeric in [-2, 2]");
+                    profile.sampling[name] = *number;
+                } else {
+                    return Return::fail("Unsupported sampling field: " + name);
+                }
+            }
+        }
         if (auto stops = table["stop_strings"].as_array())
             for (const auto &value : *stops) {
                 auto stop = value.value<std::string>();

@@ -6,6 +6,10 @@ base_url = "http://127.0.0.1:8080" # Local project default.
 tool_syntax = "qwen_xml" # Source: template function/parameter tags.
 context_tokens = 16384 # Conservative project default for consumer hardware.
 temperature = 0.3 # Project experiment setting; not a publisher recommendation.
+[sampling]
+top_k = 40 # Project value; matches the pinned llama-server default.
+top_p = 0.95 # Project value; matches the pinned llama-server default.
+min_p = 0.05 # Project value; matches the pinned llama-server default.
 stop_strings = ["<|im_end|>"] # Source: template turn boundary.
 [template]
 turn_prefix = "<|im_start|>{role}\n" # Source: role turn prefix.

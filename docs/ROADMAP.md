@@ -185,19 +185,16 @@ phase-0 baseline at the same model and tier, and two weeks of real use with no l
 
 ...
 ## Phase 1a — Skeleton and LLM layer (partially verified)
-- [ ] CMake skeleton, presets, CPM dependencies (pinned), toolchain check for `std::jthread`, CI,
-   `.clang-format`, `.clang-tidy`.
-- [ ] `util`: `Result<T>`, logging, string helpers, token estimate.
-- [ ] Concurrency model: one thread for generation, one for the UI, one per running shell command.
-   Cancellation through `std::stop_token`. Document it in `cancellation-in-cpp.md`.
-- [ ] `LlmBackend`, `FakeBackend` (replays phase-0 recording format), `LlamaServerBackend`: calls
-   `/completion` with streaming, `cache_prompt: true`, and the profile's sampling settings. The
-   **chat template is applied client-side** from the profile so Platypus controls the exact prefix.
-   Also `/health` and `/tokenize`. Field names from the pinned llama.cpp README.
-- [ ] Model profiles (TOML): role prefixes and suffixes, tool-call syntax family, stop strings,
-   sampling, reasoning handling, edit format, context size per tier. Ship
-   `profiles/ornith-1.0.toml` and `profiles/gemma-4.toml`, each value with a comment pointing to
-   its source. ADR for the reasoning-history default (see "Model facts").
+- [x] CMake presets, pinned CPM dependencies, `std::jthread` compile check, CI workflow and
+   `.clang-format` configuration.
+- [ ] Remote CI and clean clang-tidy run remain outstanding.
+- [x] `util::Result<T>`, logging and token-estimate helpers.
+- [x] Generation/UI worker ownership, stop-token cancellation and bounded process groups.
+- [x] Fake and llama-server backends, SSE/raw transport, tokenizer/health requests and
+   profile-driven client-side templates, including validated sampling propagation (ADR-016).
+- [x] TOML Ornith/Gemma profiles cover syntax, delimiters, stop strings, sampling, reasoning and
+   context limits.
+- [ ] Per-tier tuning and real-model template/quality acceptance remain human work.
 
 ## Phase 1b — Tools and agent loop (partially verified)
 - [x] JSON, Qwen XML and Gemma tool-call codecs; tolerant bounded parsing, with duplicate/depth

@@ -3,6 +3,7 @@
 
 #include "util/result.hpp"
 #include <map>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
 
@@ -25,6 +26,8 @@ struct ModelProfile {
     std::string reasoning_open;
     std::string reasoning_close;
     std::vector<std::string> stop_strings;
+    /// Validated llama-server generation fields other than temperature and output length.
+    nlohmann::json sampling = nlohmann::json::object();
     int context_tokens = 16384;
     float temperature = 0.3f;
     bool preserve_reasoning = false;

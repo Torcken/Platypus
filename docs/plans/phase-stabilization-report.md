@@ -12,6 +12,10 @@ streaming, and incomplete-batch rejection.
 Verification for this continuation: Python 41/41; dev, ASan and UBSan each 9/9 CTest groups. The
 sanitizer suites were run with the permissions needed by LeakSanitizer and the loopback fixtures.
 
+Subsequent verified work adds ripgrep-backed bounded search, the exact/regex `EditFormat` strategy,
+and validated sampling propagation on chat, streaming, and raw completion requests. See ADR-016 for
+sampling limits; the real-model edit comparison and model-side sampling equivalence remain open.
+
 ## Built
 
 - Restored the executable and dev/ASan/UBSan presets with pinned CPM dependencies and a real

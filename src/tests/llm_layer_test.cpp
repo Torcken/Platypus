@@ -81,12 +81,28 @@ void test_llama_server_backend() {
     assert(tokens.is_ok() && tokens.value().size() == 3);
     ModelProfile profile;
     profile.name = "fixture";
+    profile.sampling = {{"top_k", 17}, {"top_p", 0.91}, {"seed", 42}};
+    backend->set_profile(profile);
+    auto sampling = backend->generate_chat({{"user", "Sampling check"}}, 0.3f, 128);
+    assert(sampling.is_ok());
+    auto sent_sampling = nlohmann::json::parse(sampling.value()[0].content);
+    assert(sent_sampling.at("top_k") == 17);
+    assert(sent_sampling.at("top_p") == 0.91);
+    assert(sent_sampling.at("seed") == 42);
+    std::string streamed_sampling;
+    auto sampling_stream =
+        backend->stream_chat({{"user", "Sampling stream"}}, 0.3f, 128,
+                             [&](const ChatChunk &chunk) { streamed_sampling += chunk.content; });
+    assert(sampling_stream.is_ok());
+    sent_sampling = nlohmann::json::parse(streamed_sampling);
+    assert(sent_sampling.at("top_k") == 17 && sent_sampling.at("seed") == 42);
     profile.turn_prefix = "<turn>{role}\n";
     profile.turn_suffix = "</turn>\n";
     backend->set_profile(profile);
-    auto raw = backend->generate_chat(messages);
+    auto raw = backend->generate_chat({{"user", "Sampling raw"}});
     assert(raw.is_ok());
-    assert(raw.value()[0].content == "Fixture raw completion.");
+    auto raw_sampling = nlohmann::json::parse(raw.value()[0].content);
+    assert(raw_sampling.at("top_k") == 17 && raw_sampling.at("seed") == 42);
     std::cout << "LlamaServerBackend tests passed!" << std::endl;
 }
 

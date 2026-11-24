@@ -6,6 +6,10 @@ base_url = "http://127.0.0.1:8080" # Local project default.
 tool_syntax = "gemma" # Source: template native tool_call delimiters.
 context_tokens = 16384 # Conservative project default, independently configurable per deployment.
 temperature = 0.3 # Project experiment setting; not a publisher recommendation.
+[sampling]
+top_k = 40 # Project value; matches the pinned llama-server default.
+top_p = 0.95 # Project value; matches the pinned llama-server default.
+min_p = 0.05 # Project value; matches the pinned llama-server default.
 stop_strings = ["<turn|>", "<|tool_response>"] # Source: template turn/tool-response boundaries.
 [template]
 turn_prefix = "<|turn>{role}\n" # Source: role prefix.

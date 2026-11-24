@@ -14,7 +14,9 @@ Status: implementation substantially restored; human exit criterion remains pend
 - [x] Excluded warm-ups and seeded task/client randomization for matrix runs.
 - [x] Gate baseline publication on complete metadata, checked local artifact hashes/client version,
   matching task sets and compatible serving settings (ADR-009). Remote serving facts remain human-verified.
-- [ ] Verify real client/server compatibility, sampling propagation and all source timing semantics.
+- [x] Profile sampling settings propagate to the actual chat, SSE and raw backend requests (ADR-016).
+- [ ] Verify real client/server compatibility, cross-client sampling equivalence and all timing
+  semantics against the pinned server.
 - [ ] Human: supply fifteen project tasks and produce the real-model baseline report.
 
 The previous "completed and verified" statement referred to placeholder behavior and is withdrawn.

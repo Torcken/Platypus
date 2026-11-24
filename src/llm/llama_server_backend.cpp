@@ -87,6 +87,12 @@ util::Result<std::string> request(const std::string &url, const std::string *pay
 nlohmann::json messages_json(const std::vector<std::pair<std::string, std::string>> &messages) {
     return nlohmann::json::parse(ChatFormatter::to_json(messages));
 }
+nlohmann::json sampling_request(nlohmann::json body, const ModelProfile *profile) {
+    if (profile)
+        for (const auto &[name, value] : profile->sampling.items())
+            body[name] = value;
+    return body;
+}
 } // namespace
 LlamaServerBackend::LlamaServerBackend(std::string base_url) : base_url_(std::move(base_url)) {
     while (!base_url_.empty() && base_url_.back() == '/')
@@ -183,20 +189,22 @@ LlamaServerBackend::generate_chat(const std::vector<std::pair<std::string, std::
                                   float temperature, int max_tokens) {
     using Return = util::Result<std::vector<ChatChunk>>;
     try {
-        auto body = nlohmann::json{
-            {"messages", messages_json(messages)},
-            {"temperature", temperature},
-            {"max_tokens", max_tokens},
-            {"stream",
-             false}}.dump();
+        auto body = sampling_request(nlohmann::json{{"messages", messages_json(messages)},
+                                                    {"temperature", temperature},
+                                                    {"max_tokens", max_tokens},
+                                                    {"stream", false}},
+                                     profile_ ? &*profile_ : nullptr)
+                        .dump();
         bool raw = profile_ && !profile_->turn_prefix.empty();
         if (raw)
-            body = nlohmann::json{{"prompt", ChatFormatter::render(messages, *profile_)},
-                                  {"temperature", profile_->temperature},
-                                  {"n_predict", max_tokens},
-                                  {"cache_prompt", true},
-                                  {"stop", profile_->stop_strings},
-                                  {"stream", false}}
+            body = sampling_request(
+                       nlohmann::json{{"prompt", ChatFormatter::render(messages, *profile_)},
+                                      {"temperature", profile_->temperature},
+                                      {"n_predict", max_tokens},
+                                      {"cache_prompt", true},
+                                      {"stop", profile_->stop_strings},
+                                      {"stream", false}},
+                       &*profile_)
                        .dump();
         auto response = post_request(raw ? "/completion" : "/v1/chat/completions", body);
         if (!response.is_ok())
@@ -246,22 +254,23 @@ util::Result<util::Void>
 LlamaServerBackend::stream_chat(const std::vector<std::pair<std::string, std::string>> &messages,
                                 float temperature, int max_tokens,
                                 std::function<void(const ChatChunk &)> callback) try {
-    auto body = nlohmann::json{
-        {"messages", messages_json(messages)},
-        {"temperature", temperature},
-        {"max_tokens", max_tokens},
-        {"stream",
-         true}}.dump();
+    auto body = sampling_request(nlohmann::json{{"messages", messages_json(messages)},
+                                                {"temperature", temperature},
+                                                {"max_tokens", max_tokens},
+                                                {"stream", true}},
+                                 profile_ ? &*profile_ : nullptr)
+                    .dump();
     bool raw = profile_ && !profile_->turn_prefix.empty();
     if (raw)
-        body = nlohmann::json{
-            {"prompt", ChatFormatter::render(messages, *profile_)},
-            {"temperature", profile_->temperature},
-            {"n_predict", max_tokens},
-            {"cache_prompt", true},
-            {"stop", profile_->stop_strings},
-            {"stream",
-             true}}.dump();
+        body =
+            sampling_request(nlohmann::json{{"prompt", ChatFormatter::render(messages, *profile_)},
+                                            {"temperature", profile_->temperature},
+                                            {"n_predict", max_tokens},
+                                            {"cache_prompt", true},
+                                            {"stop", profile_->stop_strings},
+                                            {"stream", true}},
+                             &*profile_)
+                .dump();
     std::map<int, nlohmann::json> tool_calls;
     bool finished_with_tool_calls = false;
     auto result = stream_request(

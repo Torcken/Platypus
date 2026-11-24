@@ -141,8 +141,13 @@ TEST_CASE("Undo walks multiple snapshots and preserves modes and symlinks") {
 TEST_CASE("Profiles load TOML and reject unknown syntax") {
     Workspace workspace;
     auto file = workspace.root / "profile.toml";
-    std::ofstream(file) << "name='test'\ntool_syntax='json_tagged'\ncontext_tokens=16384\n";
-    REQUIRE(llm::ModelProfileManager::read_profile(file.string()).is_ok());
+    std::ofstream(file) << "name='test'\ntool_syntax='json_tagged'\ncontext_tokens=16384\n"
+                           "[sampling]\ntop_k=17\ntop_p=0.91\nseed=42\n";
+    auto loaded = llm::ModelProfileManager::read_profile(file.string());
+    REQUIRE(loaded.is_ok());
+    REQUIRE(loaded.value().sampling.at("top_k") == 17);
+    REQUIRE(loaded.value().sampling.at("top_p") == 0.91);
+    REQUIRE(loaded.value().sampling.at("seed") == 42);
     std::ofstream(file) << "name='test'\ntool_syntax='unknown'\n";
     REQUIRE_FALSE(llm::ModelProfileManager::read_profile(file.string()).is_ok());
     REQUIRE_FALSE(
@@ -156,7 +161,8 @@ TEST_CASE("Profiles reject mistyped settings and invalid budgets instead of sile
           "context_tokens=4294983680", "temperature='cold'", "temperature=nan",
           "stop_strings='stop'", "stop_strings=[1]", "tool_syntax=3", "template=false",
           "[template]\nturn_prefix='missing role'", "[template]\nturn_suffix=4",
-          "[reasoning]\npreserve='false'", "[reasoning]\nopen='<think>'"}) {
+          "[reasoning]\npreserve='false'", "[reasoning]\nopen='<think>'", "[sampling]\ntop_k=1.5",
+          "[sampling]\ntop_p=1.1", "[sampling]\nseed=-2", "[sampling]\nunknown=1"}) {
         INFO(setting);
         std::ofstream(file) << "name='fixture'\n" << setting << '\n';
         REQUIRE_FALSE(llm::ModelProfileManager::read_profile(file.string()).is_ok());

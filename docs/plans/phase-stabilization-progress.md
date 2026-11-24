@@ -38,6 +38,10 @@ while the existing `use_regex` argument remains supported. Unknown formats (incl
 without a write; fuzzy rollout awaits the phase-0 model comparison. Dev, ASan and UBSan each passed
 9/9 CTest groups; Python passed 41/41.
 
+Sampling continuation (ADR-016): strict profile fields now propagate to generic chat, SSE and raw
+completion requests; the benchmark request recorder observes those actual values. Focused profile
+and loopback request tests pass. Real-server equivalence remains unverified.
+
 Continuation: baseline provenance/comparison gates implemented (ADR-009); 32 Python tests passed.
 
 Native history continuation (ADR-010): typed tool observations, native declarations and response

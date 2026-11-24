@@ -23,8 +23,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body = json.dumps({"tokens": [1, 2, 3]})
             content_type = "application/json"
         elif self.path == "/completion":
-            body = json.dumps({"content": "Fixture raw completion."})
+            if "Sampling raw" in request.get("prompt", ""):
+                body = json.dumps({"content": json.dumps({key: request[key] for key in ("top_k", "top_p", "seed")})})
+            else:
+                body = json.dumps({"content": "Fixture raw completion."})
             content_type = "application/json"
+        elif request.get("stream") and any(
+            message.get("content") == "Sampling stream" for message in request.get("messages", [])
+        ):
+            sampling = {key: request[key] for key in ("top_k", "top_p", "seed")}
+            chunk = {"choices": [{"delta": {"content": json.dumps(sampling)}, "finish_reason": "stop"}]}
+            body = "data: " + json.dumps(chunk) + "\n\ndata: [DONE]\n\n"
+            content_type = "text/event-stream"
         elif request.get("stream") and any(
             message.get("content") == "Incomplete tools" for message in request.get("messages", [])
         ):
@@ -56,7 +66,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body += "data: [DONE]\n\n"
             content_type = "text/event-stream"
         else:
-            body = json.dumps({"choices": [{"message": {"content": "Fixture response from HTTP server."}}]})
+            if any(
+                message.get("content") == "Sampling check" for message in request.get("messages", [])
+            ):
+                content = json.dumps({key: request[key] for key in ("top_k", "top_p", "seed")})
+            else:
+                content = "Fixture response from HTTP server."
+            body = json.dumps({"choices": [{"message": {"content": content}}]})
             content_type = "application/json"
         data = body.encode()
         self.send_response(200)

@@ -6,6 +6,8 @@
 - [x] Ornith/Gemma syntax parsing, reasoning policy, prefix-stability regression tests.
 - [x] Typed tool observations, native declarations/responses and CLI fixture sessions (ADR-010).
 - [x] Refuse invalid profile types, incomplete reasoning and non-finite sampling values.
+- [x] Validate supported profile sampling fields and send them on chat, streaming and raw requests
+  (ADR-016); the HTTP fixture asserts actual request fields.
 - [x] Joined generation/UI workers and platform-local bounded subprocess execution.
 - [x] Formatting configuration and Linux/macOS CI workflow written.
 - [ ] Run CI, especially macOS toolchain discovery; production clang-tidy cleanup remains.
