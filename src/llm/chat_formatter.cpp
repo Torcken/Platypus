@@ -208,6 +208,22 @@ std::string ChatFormatter::render(const History &messages, const ModelProfile &p
     return result + turn_prefix(profile, "assistant") + profile.generation_suffix;
 }
 
+std::string ChatFormatter::stable_prefix(const History &messages, const ModelProfile &profile) {
+    History system;
+    for (const auto &[role, content] : messages) {
+        if (role != "system")
+            break;
+        system.emplace_back(role, content);
+    }
+    if (system.empty())
+        return "";
+    auto rendered = render(system, profile);
+    auto generation_header = turn_prefix(profile, "assistant") + profile.generation_suffix;
+    if (rendered.ends_with(generation_header))
+        rendered.resize(rendered.size() - generation_header.size());
+    return rendered;
+}
+
 std::string ChatFormatter::to_json(const History &messages) {
     nlohmann::json formatted = nlohmann::json::array();
     for (const auto &[role, content] : messages) {

@@ -99,6 +99,20 @@ LlamaServerBackend::LlamaServerBackend(std::string base_url) : base_url_(std::mo
         base_url_.pop_back();
     auto *trace = std::getenv("PLATYPUS_BENCHMARK_TRACE");
     benchmark_metadata_enabled_ = trace && std::string_view(trace) == "1";
+    auto *diagnostic = std::getenv("PLATYPUS_DEBUG_PREFIX");
+    prefix_diagnostic_enabled_ = diagnostic && std::string_view(diagnostic) == "1";
+}
+void LlamaServerBackend::diagnose_prefix(
+    const std::vector<std::pair<std::string, std::string>> &messages) {
+    if (!prefix_diagnostic_enabled_ || !profile_)
+        return;
+    auto current = ChatFormatter::stable_prefix(messages, *profile_);
+    if (current.empty())
+        return;
+    if (!previous_stable_prefix_.empty() && current != previous_stable_prefix_)
+        util::Logger::get_instance().warn(
+            "Stable system prompt prefix changed between generations");
+    previous_stable_prefix_ = std::move(current);
 }
 util::Result<CompletionResult> LlamaServerBackend::complete(const CompletionRequest &completion,
                                                             TokenCallback on_token,
@@ -197,6 +211,8 @@ LlamaServerBackend::generate_chat(const std::vector<std::pair<std::string, std::
                         .dump();
         bool raw = profile_ && !profile_->turn_prefix.empty();
         if (raw)
+            diagnose_prefix(messages);
+        if (raw)
             body = sampling_request(
                        nlohmann::json{{"prompt", ChatFormatter::render(messages, *profile_)},
                                       {"temperature", profile_->temperature},
@@ -261,6 +277,8 @@ LlamaServerBackend::stream_chat(const std::vector<std::pair<std::string, std::st
                                  profile_ ? &*profile_ : nullptr)
                     .dump();
     bool raw = profile_ && !profile_->turn_prefix.empty();
+    if (raw)
+        diagnose_prefix(messages);
     if (raw)
         body =
             sampling_request(nlohmann::json{{"prompt", ChatFormatter::render(messages, *profile_)},

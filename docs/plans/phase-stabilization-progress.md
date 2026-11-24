@@ -50,6 +50,10 @@ Phase 2 continuation (ADR-017): the agent blocks the fourth identical tool actio
 returns a corrective observation, and permits recovery with a different call. FakeBackend verifies
 the guard and successful recovery. Paired model-quality impact is not measured.
 
+Phase 2 prefix diagnostics (ADR-018): opt-in `PLATYPUS_DEBUG_PREFIX=1` compares the rendered stable
+system portion between generations and warns on changes. Formatter and loopback HTTP tests cover
+unchanged and changed prefixes; this is a prompt diagnostic, not a KV-cache performance result.
+
 Continuation: baseline provenance/comparison gates implemented (ADR-009); 32 Python tests passed.
 
 Native history continuation (ADR-010): typed tool observations, native declarations and response

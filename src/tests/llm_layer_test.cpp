@@ -7,6 +7,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -103,6 +104,18 @@ void test_llama_server_backend() {
     assert(raw.is_ok());
     auto raw_sampling = nlohmann::json::parse(raw.value()[0].content);
     assert(raw_sampling.at("top_k") == 17 && raw_sampling.at("seed") == 42);
+
+    setenv("PLATYPUS_DEBUG_PREFIX", "1", 1);
+    std::ostringstream prefix_log;
+    auto *previous_error_buffer = std::cerr.rdbuf(prefix_log.rdbuf());
+    LlamaServerBackend diagnostic_backend(endpoint);
+    diagnostic_backend.set_profile(profile);
+    auto first = diagnostic_backend.generate_chat({{"system", "stable instructions"}});
+    auto changed = diagnostic_backend.generate_chat({{"system", "changed instructions"}});
+    std::cerr.rdbuf(previous_error_buffer);
+    unsetenv("PLATYPUS_DEBUG_PREFIX");
+    assert(first.is_ok() && changed.is_ok());
+    assert(prefix_log.str().find("Stable system prompt prefix changed") != std::string::npos);
     std::cout << "LlamaServerBackend tests passed!" << std::endl;
 }
 

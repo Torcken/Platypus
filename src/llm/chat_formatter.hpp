@@ -32,6 +32,10 @@ class ChatFormatter {
     static std::string tool_definitions(const nlohmann::json &tools, const std::string &syntax);
     static std::string render(const std::vector<std::pair<std::string, std::string>> &messages,
                               const ModelProfile &profile);
+    /// Render the leading stable system portion used for runtime prefix diagnostics.
+    static std::string
+    stable_prefix(const std::vector<std::pair<std::string, std::string>> &messages,
+                  const ModelProfile &profile);
     static std::string to_json(const std::vector<std::pair<std::string, std::string>> &messages);
 
     /**

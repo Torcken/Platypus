@@ -249,8 +249,8 @@ Concept docs: `grammar-constrained-decoding.md`, `context-management.md`.
    history. Inserted **after** the stable prefix, never inside it.
 4. **Context manager:** token budget per tier, tool-output truncation, compaction only at task
    boundaries, recent turns kept verbatim.
-5. **Prefix stability check:** a debug mode that warns when the start of the prompt changes
-   between turns. Unit test: two consecutive turns share the exact same prefix.
+5. [x] **Prefix stability check:** `PLATYPUS_DEBUG_PREFIX=1` warns when the rendered stable system
+   prefix changes between generations; native tests assert the stable prefix and diagnostic.
 6. [x] **Loop guard:** block the fourth and later identical actions (same definition as phase 0)
    and return a corrective observation (ADR-017).
 

@@ -280,12 +280,15 @@ TEST_CASE("Qwen tool observations use native response blocks and preserve the ca
     std::vector<std::pair<std::string, std::string>> history{{"system", "fixed"},
                                                              {"user", "query"}};
     auto before = llm::ChatFormatter::render(history, profile);
+    auto stable_prefix = llm::ChatFormatter::stable_prefix(history, profile);
+    REQUIRE(stable_prefix == "<|im_start|>system\nfixed<|im_end|>\n");
     std::string call =
         "<tool_call><function=read><parameter=path>x</parameter></function></tool_call>";
     history.emplace_back("assistant", call);
     history.emplace_back("tool", llm::ChatFormatter::tool_observation("read", "one", false));
     history.emplace_back("tool", llm::ChatFormatter::tool_observation("read", "missing", true));
     auto after = llm::ChatFormatter::render(history, profile);
+    REQUIRE(llm::ChatFormatter::stable_prefix(history, profile) == stable_prefix);
     REQUIRE(after.starts_with(before + call));
     REQUIRE(after.find(
                 "<|im_start|>user\n<tool_response>\none\n</tool_response>\n<tool_response>\nError: "

@@ -44,8 +44,12 @@ class LlamaServerBackend : public LlmBackend {
   private:
     std::string base_url_;
     std::optional<ModelProfile> profile_;
+    bool prefix_diagnostic_enabled_ = false;
+    std::string previous_stable_prefix_;
     bool benchmark_metadata_enabled_ = false;
     std::string benchmark_metadata_;
+
+    void diagnose_prefix(const std::vector<std::pair<std::string, std::string>> &messages);
 
     // Helper methods for network communication (to be implemented in .cpp)
     util::Result<std::string> post_request(const std::string &endpoint,

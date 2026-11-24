@@ -37,6 +37,7 @@ read-only. Writes/edits and shell commands require explicit approval; `--yes` ap
 all actions for that invocation. Commands have deadlines/output limits. Snapshots and append-only
 sessions live in `.platypus/`, independent of your Git history. `/undo` previews a restore.
 The shell is not a sandbox. Source-derived profiles still require real-model compatibility checks.
+Set `PLATYPUS_DEBUG_PREFIX=1` to log when the rendered system prefix changes between generations.
 
 ## Project documentation
 

@@ -4,6 +4,6 @@
 - [ ] Real-recording parser regression corpus.
 - [ ] Ranked tree-sitter repository map.
 - [ ] Measured per-tier context management.
-- [ ] Runtime prefix diagnostics (a deterministic template regression exists).
+- [x] Opt-in runtime stable-prefix diagnostics and exact native prefix regressions.
 - [x] Fourth-and-later identical actions are blocked with a corrective tool observation (ADR-017).
 - [ ] Human paired benchmark exit measurements.
