@@ -239,9 +239,10 @@ See `docs/plans/phase-stabilization-progress.md` for remaining code and human ex
 ...
 Concept docs: `grammar-constrained-decoding.md`, `context-management.md`.
 
-1. **Grammar:** a GBNF generator per tool-call codec, from each tool's JSON schema. The output
-   grammar allows either free text or exactly one valid tool call in the profile's syntax. Sent in
-   the `grammar` field. Unit tests on the generated grammars.
+1. **Grammar:** a GBNF generator per tool-call codec, from each tool's JSON schema. The offline
+   single-call generator and schema regressions are implemented (ADR-019). A mode that permits
+   ordinary final answers as well as calls, llama.cpp validator checks, request-path integration,
+   and model acceptance remain outstanding; do not attach a call-only grammar to every request.
 2. **Parser hardening:** the phase-1 tolerant parser stays as the fallback when grammar is off or
    unsupported. Extend it with every failure seen in phase-1 recordings, each as a regression test.
 3. **Repository map** with tree-sitter (C, C++, Python, JavaScript/TypeScript, Rust, Go): files,

@@ -3,6 +3,7 @@
 #include "core/execution_engine.hpp"
 #include "llm/chat_formatter.hpp"
 #include "llm/fake_backend.hpp"
+#include "llm/tool_grammar.hpp"
 #include "platform/process.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
@@ -338,6 +339,49 @@ TEST_CASE("Native declarations advertise schemas without conflicting JSON call i
     REQUIRE(qwen.ends_with("</tools>\n"));
     REQUIRE(llm::ChatFormatter::tool_call_instruction("gemma").find("Use JSON") ==
             std::string::npos);
+}
+
+TEST_CASE("GBNF tool grammar supports all native syntax families and flat property types") {
+    nlohmann::json tools = {{{"type", "function"},
+                             {"function",
+                              {{"name", "read_file"},
+                               {"parameters",
+                                {{"type", "object"},
+                                 {"properties",
+                                  {{"path", {{"type", "string"}}},
+                                   {"start_line", {{"type", "integer"}}},
+                                   {"enabled", {{"type", "boolean"}}},
+                                   {"score", {{"type", "number"}}}}},
+                                 {"required", {"path"}}}}}}}};
+    auto json = llm::ToolGrammar::generate(tools, "json_tagged");
+    REQUIRE(json.is_ok());
+    REQUIRE(json.value().find("\\\"tool_call\\\"") != std::string::npos);
+    REQUIRE(json.value().find("arguments-a ::= ") != std::string::npos);
+    REQUIRE(json.value().find("integer ::= ") != std::string::npos);
+    REQUIRE(json.value().find("number ::= ") != std::string::npos);
+    REQUIRE(json.value().find("boolean ::= ") != std::string::npos);
+
+    auto qwen = llm::ToolGrammar::generate(tools, "qwen_xml");
+    REQUIRE(qwen.is_ok());
+    REQUIRE(qwen.value().find("<tool_call><function=read_file>") != std::string::npos);
+    REQUIRE(qwen.value().find("<parameter=path>") != std::string::npos);
+
+    auto gemma = llm::ToolGrammar::generate(tools, "gemma");
+    REQUIRE(gemma.is_ok());
+    REQUIRE(gemma.value().find("<|tool_call>call:read_file{") != std::string::npos);
+    REQUIRE(gemma.value().find("gemma-string ::= ") != std::string::npos);
+}
+
+TEST_CASE("GBNF generator rejects unsupported schema declarations") {
+    auto tools = nlohmann::json::array(
+        {{{"type", "function"},
+          {"function", {{"name", "bad-tool"}, {"parameters", {{"type", "object"}}}}}}});
+    REQUIRE_FALSE(llm::ToolGrammar::generate(tools, "json_tagged").is_ok());
+    tools[0]["function"]["name"] = "read";
+    tools[0]["function"]["parameters"] = {{"type", "object"},
+                                          {"properties", {{"path", {{"type", "array"}}}}}};
+    REQUIRE_FALSE(llm::ToolGrammar::generate(tools, "json_tagged").is_ok());
+    REQUIRE_FALSE(llm::ToolGrammar::generate(tools, "unknown").is_ok());
 }
 
 TEST_CASE("Qwen arguments use declared types rather than guessing numeric-looking filenames") {

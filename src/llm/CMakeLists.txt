@@ -8,6 +8,7 @@ add_library(llm STATIC
     llama_server_backend.cpp
     llm_backend_factory.cpp
     model_profile.cpp
+    tool_grammar.cpp
 )
 
 target_include_directories(llm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
