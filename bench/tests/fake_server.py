@@ -6,7 +6,9 @@ import threading
 from typing import Iterator
 
 @contextmanager
-def fake_server(edit: dict[str, str] | None = None, responses: list[str] | None = None, captured: list[dict] | None = None) -> Iterator[str]:
+def fake_server(edit: dict[str, str] | None = None, responses: list[str] | None = None,
+                captured: list[dict] | None = None,
+                tokenization: dict | None = None) -> Iterator[str]:
     """Yield a loopback endpoint returning a scripted file edit and known token timings."""
     edit = edit or {"path": "answer.txt", "content": "verified\n"}
     counter = 0
@@ -20,7 +22,8 @@ def fake_server(edit: dict[str, str] | None = None, responses: list[str] | None 
                 captured.append({"endpoint": self.path, "body": request,
                                  "headers": dict(self.headers.items())})
             if self.path == "/tokenize":
-                body = json.dumps({"tokens": list(range(10))}).encode()
+                body = json.dumps(tokenization if tokenization is not None else
+                                  {"tokens": list(range(10))}).encode()
                 self.send_response(200)
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()

@@ -10,7 +10,8 @@ flowchart LR
     E --> B[llm::LlmBackend::complete]
     B --> HTTP[libcurl / llama-server]
     B --> Fake[FakeBackend fixtures]
-    E --> C[ContextManager / append-only turns]
+    E --> C[agent::ContextManager / budget and append-only turns]
+    C --> B
     E --> T[ToolRegistry / six tools]
     E --> S[SQLite session log]
     T --> A[SnapshotManager / approvals]
@@ -22,7 +23,10 @@ A turn starts with fixed system instructions and tool definitions. User requests
 append to history; a profile renders raw `/completion` prompts or the generic transport uses
 `/v1/chat/completions`. The selected syntax codec extracts calls. ToolRegistry validates flat
 arguments, executes one action at a time, caps outputs, and returns errors for model recovery.
-Context compaction is explicit between tasks; the loop stops at a conservative budget.
+The context manager reserves reply space before generation. Native profiles tokenize the rendered
+prompt with the inference server; generic chat uses a labelled byte estimate. Full budgets and
+tokenizer failures stop before generation without removing turns. The terminal receives copied
+usage values through a worker callback. Legacy explicit compaction is never called mid-task.
 
 Mutations show a diff and require approval, then commit a full workspace snapshot in the shadow
 repository. The user's `.git/` is excluded. `--yes` authorizes one invocation and logs approved
@@ -34,7 +38,8 @@ Session turns append to SQLite with database triggers prohibiting updates/delete
 them in order without duplicating records. The terminal runs generation on one joined worker,
 wakes the UI with PostEvent, and waits on a cancellable condition variable for approvals.
 
-Start reading `src/main.cpp`, then `src/core/execution_engine.cpp`, `src/core/tools.cpp`, and
+Start reading `src/main.cpp`, then `src/core/execution_engine.cpp`,
+`src/agent/context_manager.cpp`, `src/core/tools.cpp`, and
 `src/util/snapshot.cpp`. Tests in `tests/unit/regression_tests.cpp` cover the audit findings;
 `tests/integration/test_cli.py` exercises the executable through a real loopback HTTP fixture.
 

@@ -34,11 +34,21 @@ struct CompletionRequest {
 struct CompletionResult {
     std::string content;
 };
+/// Prompt size from the selected tokenizer, or an explicitly labelled fallback estimate.
+struct PromptSize {
+    std::size_t tokens;
+    bool tokenized;
+};
 using TokenCallback = std::function<void(const std::string &)>;
 class LlmBackend {
   public:
     virtual ~LlmBackend() = default;
     virtual const ModelProfile *profile() const { return nullptr; }
+    /// Count a prospective prompt without changing history or generating any text.
+    /// Tokenizer failures are errors; a backend without a tokenizer returns an estimate.
+    virtual util::Result<PromptSize>
+    count_prompt_tokens(const std::vector<std::pair<std::string, std::string>> &messages,
+                        std::stop_token stop);
     virtual util::Result<CompletionResult> complete(const CompletionRequest &request,
                                                     TokenCallback on_token, std::stop_token stop) {
         set_stop_token(stop);

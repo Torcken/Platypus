@@ -22,6 +22,7 @@ with tempfile.TemporaryDirectory(prefix="platypus-terminal-") as workspace:
     exited = False
     try:
         deadline = time.monotonic() + 8
+        task_sent_at = None
         sent = False
         while time.monotonic() < deadline:
             ready, _, _ = select.select([master], [], [], .1)
@@ -33,8 +34,11 @@ with tempfile.TemporaryDirectory(prefix="platypus-terminal-") as workspace:
                 output += chunk
                 if b"\x1b[6n" in chunk:
                     os.write(master, b"\x1b[1;1R")
-            if b"Platypus" in output and not sent:
-                time.sleep(.2)
+            if b"Platypus" in output and task_sent_at is None:
+                os.write(master, b"hello\r")
+                task_sent_at = time.monotonic()
+            if (task_sent_at is not None and b"estimated" in output
+                    and time.monotonic() - task_sent_at > .3 and not sent):
                 os.write(master, b"\x1b")
                 sent = True
             result, status = os.waitpid(pid, os.WNOHANG)
@@ -44,9 +48,10 @@ with tempfile.TemporaryDirectory(prefix="platypus-terminal-") as workspace:
                 break
         assert exited, "Terminal did not exit after Escape"
         assert b"Platypus" in output
+        assert b"estimated" in output, output.decode(errors="replace")
     finally:
         if not exited:
             os.killpg(pid, signal.SIGKILL)
             os.waitpid(pid, 0)
         os.close(master)
-print("FTXUI pseudoterminal startup/exit passed")
+print("FTXUI pseudoterminal task/context/exit passed")

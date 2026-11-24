@@ -12,5 +12,6 @@
 - [ ] Verify native tool-history/template parity against real models and per-tier settings.
 - [x] Replay Phase 0 JSONL fixtures with explicit exhaustion and malformed-input errors.
 - [ ] Complete canonical API migration.
+  agent::ContextManager is migrated; Tool/ToolResult and SnapshotStore remain.
 
 Not a completed phase: source-derived profiles and local fixtures are not hardware acceptance.

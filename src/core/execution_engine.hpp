@@ -5,7 +5,7 @@
 #include "../llm/chat_formatter.hpp"
 #include "../util/logger.hpp"
 #include "../util/result.hpp"
-#include "context_manager.hpp"
+#include "agent/context_manager.hpp"
 #include "session/store.hpp"
 #include "tool.hpp"
 #include <memory>
@@ -59,9 +59,14 @@ class ExecutionEngine {
     /// Attach a session log; history is loaded without appending duplicate records.
     util::Result<bool> attach_session(std::shared_ptr<session::Store> store, const std::string &id);
     void set_token_callback(llm::TokenCallback callback) { on_token_ = std::move(callback); }
+    /// Synchronous worker callback; consumers must copy usage before returning.
+    void set_context_callback(std::function<void(const agent::ContextUsage &)> callback) {
+        on_context_ = std::move(callback);
+    }
 
   private:
     llm::TokenCallback on_token_;
+    std::function<void(const agent::ContextUsage &)> on_context_;
     void append_turn(const std::string &role, const std::string &text);
     std::shared_ptr<session::Store> session_store_;
     std::string session_id_;
@@ -72,7 +77,7 @@ class ExecutionEngine {
 
     std::shared_ptr<llm::LlmBackend> backend_;
     std::shared_ptr<ToolRegistry> tool_registry_;
-    std::unique_ptr<ContextManager> context_manager_;
+    std::unique_ptr<agent::ContextManager> context_manager_;
 
     std::vector<PlanStep> current_plan_;
     size_t active_plan_index_ = 0;

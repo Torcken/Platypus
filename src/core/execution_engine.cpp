@@ -2,13 +2,12 @@
 // The registry handles approvals; ContextManager compaction is explicit between tasks only.
 #include "execution_engine.hpp"
 #include "codec.hpp"
-#include <algorithm>
 #include <map>
 namespace platypus::core {
 ExecutionEngine::ExecutionEngine(std::shared_ptr<llm::LlmBackend> backend,
                                  std::shared_ptr<ToolRegistry> registry, size_t max_history)
     : backend_(std::move(backend)), tool_registry_(std::move(registry)),
-      context_manager_(std::make_unique<ContextManager>(backend_, max_history)) {}
+      context_manager_(std::make_unique<agent::ContextManager>(backend_, max_history)) {}
 void ExecutionEngine::append_turn(const std::string &role, const std::string &text) {
     if (session_store_) {
         auto result = session_store_->append(session_id_, role, text);
@@ -65,19 +64,14 @@ util::Result<std::string> ExecutionEngine::run(const std::string &query, int max
         if (stop.stop_requested())
             return Return::fail("Cancelled");
         auto messages = context_manager_->get_history();
-        // LLM note: conservative byte budget avoids overflow without rewriting cached history.
-        std::size_t bytes = 0;
-        for (const auto &[role, text] : messages)
-            bytes += role.size() + text.size() + 32;
-        auto context_limit = profile ? profile->context_tokens : 16384;
-        if (context_limit < 1)
-            return Return::fail("Invalid context budget");
-        auto output_limit = std::min(2048, std::max(1, context_limit / 4));
-        if (bytes > static_cast<std::size_t>(context_limit - output_limit))
-            return Return::fail("Context budget reached; start a new session");
-        auto response = backend_->complete(
-            {messages, profile ? profile->temperature : 0.3f, output_limit, tools}, on_token_,
-            stop);
+        auto budget = context_manager_->prepare(stop);
+        if (on_context_ && context_manager_->usage())
+            on_context_(*context_manager_->usage());
+        if (!budget.is_ok())
+            return Return::fail(budget.error());
+        auto response = backend_->complete({messages, profile ? profile->temperature : 0.3f,
+                                            static_cast<int>(budget.value().output_tokens), tools},
+                                           on_token_, stop);
         if (!response.is_ok())
             return Return::fail(response.error());
         std::string text = response.value().content;

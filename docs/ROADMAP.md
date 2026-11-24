@@ -223,7 +223,8 @@ phase-0 baseline at the same model and tier, and two weeks of real use with no l
 
 - [x] Minimal FTXUI history/input, streamed generation, approval prompts and cancellation.
 - [x] Headless Platypus benchmark adapter and architecture document.
-- [ ] Accurate token/context status display, sustained interactive testing and real-model benchmarks.
+- [x] Context status from profile budgets; native tokenizer counts and explicit fallback estimates.
+- [ ] Sustained interactive testing and real-model benchmarks.
 
 ## Stabilization & Foundation (Current Phase)
 - [x] Enhance CMake configuration (ctest, presets).

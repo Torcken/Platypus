@@ -61,6 +61,21 @@ for syntax, prefix, suffix, role, call, response_marker in (
         assert len(completions) == 2
         assert completions[1]["prompt"].startswith(completions[0]["prompt"] + call)
         assert response_marker in completions[1]["prompt"]
+        tokenizations = [item["body"] for item in captured if item["endpoint"] == "/tokenize"]
+        assert len(tokenizations) == len(completions)
+        for tokenization, completion in zip(tokenizations, completions):
+            assert tokenization["content"] == completion["prompt"]
+            assert tokenization["add_special"] and tokenization["parse_special"]
+        captured = []
+        with fake_server(responses=[call], captured=captured,
+                         tokenization={"error": "Tokenizer unavailable"}) as endpoint:
+            rejected = subprocess.run(
+                [binary, "run", "--headless", "--yes", "--project", temporary,
+                 "--endpoint", endpoint, "--profile", str(profile), "Must not generate"],
+                capture_output=True, text=True, timeout=10)
+        assert rejected.returncode != 0
+        assert "Prompt tokenization failed" in rejected.stderr
+        assert all(item["endpoint"] == "/tokenize" for item in captured)
 print("Native Qwen/Gemma CLI history integration passed")
 
 # Score a failed edit and recovery through the same proxy used for real benchmark runs.
@@ -114,5 +129,8 @@ for syntax in ("json_tagged", "qwen_xml", "gemma"):
         assert metrics["prompt_tokens_total"] == 60, metrics
         assert not metrics["tool_metrics_errors"], metrics
         assert all("X-Platypus-Benchmark" not in item["headers"] for item in captured)
-        assert all("client_metadata" in record for record in records)
+        assert all("client_metadata" in record for record in records
+                   if record["endpoint"] != "/tokenize")
+        assert all("client_metadata" not in record for record in records
+                   if record["endpoint"] == "/tokenize")
 print("JSON/Qwen/Gemma proxy tool metrics integration passed")

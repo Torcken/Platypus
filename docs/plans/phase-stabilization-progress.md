@@ -35,3 +35,9 @@ Native benchmark continuation (ADR-011): optional proxy metadata, independent st
 and deduplicated edit-error observations implemented. Full CLI/proxy tests cover all three syntax
 families, a failed edit/retry and known token timings. Verification: dev/ASan/UBSan configure/build
 and CTest each passed 9/9; Python unittest passed 41/41. No real-model result is claimed.
+
+Context continuation (ADR-012): canonical agent::ContextManager, native prompt tokenization,
+explicit generic estimates, reply reservations and a mutex-protected terminal status implemented.
+Boundary/cancellation/error tests and a task-submitting PTY test pass. Verification: configure,
+build and CTest on dev/ASan/UBSan each passed 9/9; Python unittest passed 41/41. Next: canonical
+Tool/ToolResult and SnapshotStore, edit/fuzz interfaces, and remaining lint/real-model checks.

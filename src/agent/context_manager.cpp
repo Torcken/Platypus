@@ -1,12 +1,47 @@
+// Context budgeting is independent of history mutation, preserving the server's cached prefix.
+// The backend counts native prompts; generic transports return a labelled byte estimate.
 #include "context_manager.hpp"
 #include "../llm/chat_formatter.hpp"
 #include "../util/logger.hpp"
 #include <algorithm>
 
-namespace platypus::core {
+namespace platypus::agent {
+
+std::string ContextUsage::describe() const {
+    return "Context: " + std::to_string(prompt_tokens) + "/" + std::to_string(context_tokens) +
+           " tokens (" + (tokenized ? "tokenized" : "estimated") + "); " +
+           std::to_string(output_tokens) + " reserved for reply";
+}
 
 ContextManager::ContextManager(std::shared_ptr<llm::LlmBackend> backend, size_t max_history)
-    : backend_(std::move(backend)), max_history_(max_history) {}
+    : backend_(std::move(backend)), max_history_(max_history) {
+    auto profile = backend_ ? backend_->profile() : nullptr;
+    auto limit = profile ? profile->context_tokens : 16384;
+    context_tokens_ = limit > 0 ? static_cast<std::size_t>(limit) : 0;
+    output_tokens_ = std::min<std::size_t>(2048, context_tokens_ / 4);
+}
+
+util::Result<ContextUsage> ContextManager::prepare(std::stop_token stop) try {
+    using Return = util::Result<ContextUsage>;
+    usage_.reset();
+    if (!backend_)
+        return Return::fail("No context sizing backend");
+    if (context_tokens_ < 4 || output_tokens_ == 0)
+        return Return::fail("Invalid context budget");
+    auto count = backend_->count_prompt_tokens(history_, stop);
+    if (!count.is_ok())
+        return Return::fail(count.error());
+    if (stop.stop_requested())
+        return Return::fail("Cancelled");
+    usage_ = ContextUsage{count.value().tokens, output_tokens_, context_tokens_,
+                          count.value().tokenized};
+    // LLM note: reserve the reply before generation; never evict cached turns mid-task.
+    if (usage_->prompt_tokens > context_tokens_ - output_tokens_)
+        return Return::fail("Context budget reached; start a new session");
+    return Return::ok(*usage_);
+} catch (const std::exception &error) {
+    return util::Result<ContextUsage>::fail(error.what());
+}
 
 void ContextManager::add_turn(const std::string &role, const std::string &content) {
     history_.push_back({role, content});
@@ -73,4 +108,4 @@ util::Result<std::string> ContextManager::generate_summary() {
     return util::Result<std::string>::ok(context_summary_);
 }
 
-} // namespace platypus::core
+} // namespace platypus::agent

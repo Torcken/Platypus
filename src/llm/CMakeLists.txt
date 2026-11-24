@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 project(platypus_llm)
 
 add_library(llm STATIC
+    backend.cpp
     chat_formatter.cpp
     fake_backend.cpp
     llama_server_backend.cpp

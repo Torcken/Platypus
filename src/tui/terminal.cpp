@@ -21,6 +21,7 @@ int run_terminal(core::ExecutionEngine &engine, core::ToolRegistry &tools, const
     std::condition_variable_any answered;
     std::string history = "Platypus — enter a task, /undo, or /quit\n";
     std::string input;
+    std::string context_status = "Context: waiting for first request";
     bool busy = false, approving = false;
     int scroll = 0;
     std::optional<bool> decision;
@@ -52,6 +53,13 @@ int run_terminal(core::ExecutionEngine &engine, core::ToolRegistry &tools, const
         return accepted;
     });
     engine.set_token_callback([&](const std::string &token) { append(token); });
+    engine.set_context_callback([&](const agent::ContextUsage &usage) {
+        {
+            std::lock_guard lock(mutex);
+            context_status = usage.describe();
+        }
+        screen.PostEvent(Event::Custom);
+    });
     auto editor = Input(&input, "Describe a task…");
     auto renderer = Renderer(editor, [&] {
         std::lock_guard lock(mutex);
@@ -69,7 +77,8 @@ int run_terminal(core::ExecutionEngine &engine, core::ToolRegistry &tools, const
             elements.push_back(element);
         }
         return vbox({text("Platypus | " + model + (busy ? " | Working" : " | Ready")) | bold,
-                     separator(), vbox(elements) | vscroll_indicator | frame | flex, separator(),
+                     text(context_status) | dim, separator(),
+                     vbox(elements) | vscroll_indicator | frame | flex, separator(),
                      approving ? text("Approve this action? Y = approve, N = deny") | bold
                                : editor->Render(),
                      text("Enter: send  Esc: cancel/exit  PgUp/PgDn: history  /undo: restore") |
@@ -142,6 +151,7 @@ int run_terminal(core::ExecutionEngine &engine, core::ToolRegistry &tools, const
         if (worker.joinable())
             worker.join();
         engine.set_token_callback({});
+        engine.set_context_callback({});
         tools.snapshots().set_confirmer({});
     }};
     screen.Loop(component);

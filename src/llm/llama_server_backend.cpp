@@ -142,6 +142,26 @@ util::Result<std::string> LlamaServerBackend::post_request(const std::string &en
 util::Result<std::string> LlamaServerBackend::health() {
     return request(base_url_ + "/health", nullptr, stop_);
 }
+util::Result<PromptSize> LlamaServerBackend::count_prompt_tokens(
+    const std::vector<std::pair<std::string, std::string>> &messages, std::stop_token stop) try {
+    if (!profile_ || profile_->turn_prefix.empty())
+        return LlmBackend::count_prompt_tokens(messages, stop);
+    set_stop_token(stop);
+    if (stop.stop_requested())
+        return util::Result<PromptSize>::fail("Cancelled");
+    auto response = post_request(
+        "/tokenize", nlohmann::json{{"content", ChatFormatter::render(messages, *profile_)},
+                                    {"add_special", true},
+                                    {"parse_special", true}}
+                         .dump());
+    if (!response.is_ok())
+        return util::Result<PromptSize>::fail("Prompt tokenization failed: " + response.error());
+    auto tokens = nlohmann::json::parse(response.value()).at("tokens").get<std::vector<int>>();
+    return util::Result<PromptSize>::ok({tokens.size(), true});
+} catch (const std::exception &error) {
+    return util::Result<PromptSize>::fail("Prompt tokenization failed: " +
+                                          std::string(error.what()));
+}
 util::Result<std::vector<int>> LlamaServerBackend::tokenize(const std::string &content) {
     auto response = post_request(
         "/tokenize",

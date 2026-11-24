@@ -402,3 +402,91 @@ TEST_CASE("Reasoning examples never execute and literal closing markers remain t
         llm::ChatFormatter::visible_response("reason</think>answer", backend->settings).value() ==
         "answer");
 }
+
+TEST_CASE("Context manager owns reply reservations and never rewrites history during sizing") {
+    struct SizedFake : llm::FakeBackend {
+        llm::ModelProfile settings;
+        std::size_t count = 768;
+        bool fail = false;
+        const llm::ModelProfile *profile() const override { return &settings; }
+        util::Result<llm::PromptSize>
+        count_prompt_tokens(const std::vector<std::pair<std::string, std::string>> &,
+                            std::stop_token) override {
+            return fail ? util::Result<llm::PromptSize>::fail("Tokenizer unavailable")
+                        : util::Result<llm::PromptSize>::ok({count, true});
+        }
+    };
+    auto backend = std::make_shared<SizedFake>();
+    backend->settings.context_tokens = 1024;
+    agent::ContextManager manager(backend, 1);
+    manager.add_turn("system", "fixed");
+    manager.add_turn("user", "request");
+    auto history = manager.get_history();
+    auto boundary = manager.prepare();
+    REQUIRE(boundary.is_ok());
+    REQUIRE(boundary.value().output_tokens == 256);
+    REQUIRE(boundary.value().prompt_tokens == 768);
+    REQUIRE(boundary.value().tokenized);
+    REQUIRE(boundary.value().describe().find("tokenized") != std::string::npos);
+    ++backend->count;
+    REQUIRE_FALSE(manager.prepare().is_ok());
+    REQUIRE(manager.usage()->prompt_tokens == 769);
+    REQUIRE(manager.get_history() == history);
+    backend->fail = true;
+    REQUIRE(manager.prepare().error() == "Tokenizer unavailable");
+    REQUIRE_FALSE(manager.usage().has_value());
+    backend->fail = false;
+    std::stop_source cancelled;
+    cancelled.request_stop();
+    REQUIRE(manager.prepare(cancelled.get_token()).error() == "Cancelled");
+    REQUIRE(manager.get_history() == history);
+}
+
+TEST_CASE("Estimated context includes serialized observations and errors before generation") {
+    auto backend = std::make_shared<llm::FakeBackend>();
+    agent::ContextManager manager(backend);
+    manager.add_turn("user", "request");
+    auto first = manager.prepare();
+    REQUIRE(first.is_ok());
+    REQUIRE_FALSE(first.value().tokenized);
+    REQUIRE(first.value().describe().find("estimated") != std::string::npos);
+    manager.add_turn("assistant", "call");
+    manager.add_turn("tool", llm::ChatFormatter::tool_observation("read", "contents", false));
+    REQUIRE(manager.prepare().value().prompt_tokens > first.value().prompt_tokens);
+    manager.add_turn("user", std::string(16000, 'x'));
+    auto history = manager.get_history();
+    REQUIRE_FALSE(manager.prepare().is_ok());
+    REQUIRE(manager.get_history() == history);
+    agent::ContextManager missing(nullptr);
+    REQUIRE_FALSE(missing.prepare().is_ok());
+}
+
+TEST_CASE("Engine reports a full context and stops before generation or mutation") {
+    struct SizedFake : llm::FakeBackend {
+        bool generated = false;
+        util::Result<llm::PromptSize>
+        count_prompt_tokens(const std::vector<std::pair<std::string, std::string>> &,
+                            std::stop_token) override {
+            return util::Result<llm::PromptSize>::ok({16384, true});
+        }
+        util::Result<llm::CompletionResult> complete(const llm::CompletionRequest &,
+                                                     llm::TokenCallback, std::stop_token) override {
+            generated = true;
+            return util::Result<llm::CompletionResult>::ok({"unreachable"});
+        }
+    };
+    Workspace workspace;
+    auto backend = std::make_shared<SizedFake>();
+    auto tools = std::make_shared<core::ToolRegistry>(workspace.root);
+    core::register_default_tools(*tools);
+    core::ExecutionEngine engine(backend, tools);
+    std::optional<agent::ContextUsage> seen;
+    engine.set_context_callback([&](const auto &usage) { seen = usage; });
+    auto result = engine.run("request");
+    REQUIRE_FALSE(result.is_ok());
+    REQUIRE(result.error().find("Context budget") != std::string::npos);
+    REQUIRE_FALSE(backend->generated);
+    REQUIRE(seen.has_value());
+    REQUIRE(seen->output_tokens == 2048);
+    REQUIRE(seen->prompt_tokens == 16384);
+}

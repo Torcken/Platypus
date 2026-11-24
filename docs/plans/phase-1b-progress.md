@@ -5,6 +5,9 @@
 - [x] Working headless CLI with explicit --yes, real HTTP backend and no factory-name mismatch.
 - [x] Successful edits, malformed-call recovery, failed-edit retry, bounded loops and cancellation tests.
 - [x] Original test files registered; assertions remain enabled in every preset.
+- [x] Canonical agent::ContextManager budgets rendered prompts, reserves replies and rejects
+  overflow without changing history; tokenizer failures stop generation (ADR-012).
 - [ ] EditFormat interface and unambiguous fuzzy edit implementation selected by benchmark evidence.
 - [ ] Fuzz targets, ripgrep-backed search and remaining canonical Tool/ToolResult migration.
-- [ ] Per-profile token/context status and broader native-codec adversarial regression corpus.
+- [x] Per-profile token/context status with tokenizer counts or explicit estimate labels.
+- [ ] Broader native-codec adversarial regression corpus.

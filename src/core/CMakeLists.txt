@@ -4,7 +4,7 @@ project(platypus_core)
 add_library(core STATIC
     codec.cpp
     tools.cpp
-    context_manager.cpp
+    ../agent/context_manager.cpp
     execution_engine.cpp
     ../session/store.cpp
 )

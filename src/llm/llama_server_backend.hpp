@@ -21,6 +21,10 @@ class LlamaServerBackend : public LlmBackend {
     /// Add opt-in proxy metadata without modifying the model request or prompt.
     util::Result<CompletionResult> complete(const CompletionRequest &request,
                                             TokenCallback on_token, std::stop_token stop) override;
+    /// Tokenize the exact rendered raw prompt, including model-configured special tokens.
+    util::Result<PromptSize>
+    count_prompt_tokens(const std::vector<std::pair<std::string, std::string>> &messages,
+                        std::stop_token stop) override;
 
     util::Result<std::vector<ChatChunk>>
     generate_chat(const std::vector<std::pair<std::string, std::string>> &messages,
