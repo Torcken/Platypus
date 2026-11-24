@@ -26,6 +26,65 @@ CPMAddPackage(NAME reproc GITHUB_REPOSITORY DaanDeMeyer/reproc GIT_TAG v14.2.5
     OPTIONS "REPROC++ ON" "REPROC_TEST OFF" "REPROC_EXAMPLES OFF")
 CPMAddPackage(NAME ftxui GITHUB_REPOSITORY ArthurSonzogni/FTXUI GIT_TAG v6.1.9
     OPTIONS "FTXUI_BUILD_DOCS OFF" "FTXUI_BUILD_EXAMPLES OFF" "FTXUI_BUILD_TESTS OFF")
+set(_PLATYPUS_PREVIOUS_BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS}")
+set(BUILD_SHARED_LIBS OFF)
+CPMAddPackage(NAME tree_sitter_runtime GITHUB_REPOSITORY tree-sitter/tree-sitter
+    GIT_TAG v0.25.10 SOURCE_SUBDIR lib)
+if(_PLATYPUS_PREVIOUS_BUILD_SHARED_LIBS STREQUAL "")
+    unset(BUILD_SHARED_LIBS)
+else()
+    set(BUILD_SHARED_LIBS "${_PLATYPUS_PREVIOUS_BUILD_SHARED_LIBS}")
+endif()
+unset(_PLATYPUS_PREVIOUS_BUILD_SHARED_LIBS)
+CPMAddPackage(NAME tree_sitter_c GITHUB_REPOSITORY tree-sitter/tree-sitter-c
+    GIT_TAG v0.24.2 DOWNLOAD_ONLY YES)
+CPMAddPackage(NAME tree_sitter_cpp GITHUB_REPOSITORY tree-sitter/tree-sitter-cpp
+    GIT_TAG v0.23.3 DOWNLOAD_ONLY YES)
+CPMAddPackage(NAME tree_sitter_python GITHUB_REPOSITORY tree-sitter/tree-sitter-python
+    GIT_TAG v0.25.0 DOWNLOAD_ONLY YES)
+CPMAddPackage(NAME tree_sitter_javascript GITHUB_REPOSITORY tree-sitter/tree-sitter-javascript
+    GIT_TAG v0.25.0 DOWNLOAD_ONLY YES)
+CPMAddPackage(NAME tree_sitter_typescript GITHUB_REPOSITORY tree-sitter/tree-sitter-typescript
+    GIT_TAG v0.23.2 DOWNLOAD_ONLY YES)
+CPMAddPackage(NAME tree_sitter_rust GITHUB_REPOSITORY tree-sitter/tree-sitter-rust
+    GIT_TAG v0.24.2 DOWNLOAD_ONLY YES)
+CPMAddPackage(NAME tree_sitter_go GITHUB_REPOSITORY tree-sitter/tree-sitter-go
+    GIT_TAG v0.23.3 DOWNLOAD_ONLY YES)
+add_library(tree_sitter_grammars STATIC
+    ${tree_sitter_c_SOURCE_DIR}/src/parser.c
+    ${tree_sitter_cpp_SOURCE_DIR}/src/parser.c
+    ${tree_sitter_python_SOURCE_DIR}/src/parser.c
+    ${tree_sitter_javascript_SOURCE_DIR}/src/parser.c
+    ${tree_sitter_typescript_SOURCE_DIR}/typescript/src/parser.c
+    ${tree_sitter_typescript_SOURCE_DIR}/tsx/src/parser.c
+    ${tree_sitter_rust_SOURCE_DIR}/src/parser.c
+    ${tree_sitter_go_SOURCE_DIR}/src/parser.c
+)
+if(EXISTS "${tree_sitter_typescript_SOURCE_DIR}/typescript/src/scanner.c")
+    target_sources(tree_sitter_grammars PRIVATE
+        ${tree_sitter_typescript_SOURCE_DIR}/typescript/src/scanner.c)
+endif()
+if(EXISTS "${tree_sitter_typescript_SOURCE_DIR}/tsx/src/scanner.c")
+    target_sources(tree_sitter_grammars PRIVATE
+        ${tree_sitter_typescript_SOURCE_DIR}/tsx/src/scanner.c)
+endif()
+foreach(grammar IN ITEMS c cpp python javascript typescript rust go)
+    if(EXISTS "${tree_sitter_${grammar}_SOURCE_DIR}/src/scanner.c")
+        target_sources(tree_sitter_grammars PRIVATE
+            "${tree_sitter_${grammar}_SOURCE_DIR}/src/scanner.c")
+    endif()
+endforeach()
+target_include_directories(tree_sitter_grammars PRIVATE
+    ${tree_sitter_c_SOURCE_DIR}/src
+    ${tree_sitter_cpp_SOURCE_DIR}/src
+    ${tree_sitter_python_SOURCE_DIR}/src
+    ${tree_sitter_javascript_SOURCE_DIR}/src
+    ${tree_sitter_typescript_SOURCE_DIR}/typescript/src
+    ${tree_sitter_typescript_SOURCE_DIR}/tsx/src
+    ${tree_sitter_rust_SOURCE_DIR}/src
+    ${tree_sitter_go_SOURCE_DIR}/src
+)
+target_link_libraries(tree_sitter_grammars PUBLIC tree-sitter)
 find_package(CURL REQUIRED)
 find_package(SQLite3 REQUIRED)
 option(PLATYPUS_ASAN "Enable AddressSanitizer" OFF)
@@ -36,10 +95,14 @@ target_compile_options(platypus_options INTERFACE -Wall -Wextra -Wpedantic)
 if(PLATYPUS_ASAN)
     target_compile_options(platypus_options INTERFACE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(platypus_options INTERFACE -fsanitize=address)
+    target_compile_options(tree_sitter_grammars PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_compile_options(tree-sitter PRIVATE -fsanitize=address -fno-omit-frame-pointer)
 endif()
 if(PLATYPUS_UBSAN)
     target_compile_options(platypus_options INTERFACE -fsanitize=undefined -fno-sanitize-recover=all)
     target_link_options(platypus_options INTERFACE -fsanitize=undefined)
+    target_compile_options(tree_sitter_grammars PRIVATE -fsanitize=undefined -fno-sanitize-recover=all)
+    target_compile_options(tree-sitter PRIVATE -fsanitize=undefined -fno-sanitize-recover=all)
 endif()
 add_subdirectory(src/util)
 add_subdirectory(src/llm)

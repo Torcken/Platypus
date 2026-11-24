@@ -210,11 +210,8 @@ std::string ChatFormatter::render(const History &messages, const ModelProfile &p
 
 std::string ChatFormatter::stable_prefix(const History &messages, const ModelProfile &profile) {
     History system;
-    for (const auto &[role, content] : messages) {
-        if (role != "system")
-            break;
-        system.emplace_back(role, content);
-    }
+    if (!messages.empty() && messages.front().first == "system")
+        system.push_back(messages.front());
     if (system.empty())
         return "";
     auto rendered = render(system, profile);

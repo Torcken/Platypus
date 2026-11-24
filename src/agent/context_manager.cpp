@@ -22,13 +22,21 @@ ContextManager::ContextManager(std::shared_ptr<llm::LlmBackend> backend, size_t 
 }
 
 util::Result<ContextUsage> ContextManager::prepare(std::stop_token stop) try {
+    return prepare(history_, stop);
+} catch (const std::exception &error) {
+    return util::Result<ContextUsage>::fail(error.what());
+}
+
+util::Result<ContextUsage>
+ContextManager::prepare(const std::vector<std::pair<std::string, std::string>> &prompt_messages,
+                        std::stop_token stop) try {
     using Return = util::Result<ContextUsage>;
     usage_.reset();
     if (!backend_)
         return Return::fail("No context sizing backend");
     if (context_tokens_ < 4 || output_tokens_ == 0)
         return Return::fail("Invalid context budget");
-    auto count = backend_->count_prompt_tokens(history_, stop);
+    auto count = backend_->count_prompt_tokens(prompt_messages, stop);
     if (!count.is_ok())
         return Return::fail(count.error());
     if (stop.stop_requested())

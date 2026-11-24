@@ -40,6 +40,10 @@ class ContextManager {
     /// Size the next prompt and reserve up to 2048 output tokens (a quarter of small contexts).
     /// Fails on cancellation, tokenizer errors or a full context, without changing any turns.
     util::Result<ContextUsage> prepare(std::stop_token stop = {});
+    /// Size a transient prompt without appending its extra context to durable history.
+    util::Result<ContextUsage>
+    prepare(const std::vector<std::pair<std::string, std::string>> &prompt_messages,
+            std::stop_token stop = {});
     /// The latest sizing result, also available when prepare() refuses a full context.
     const std::optional<ContextUsage> &usage() const { return usage_; }
 

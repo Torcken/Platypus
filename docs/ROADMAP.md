@@ -245,9 +245,10 @@ Concept docs: `grammar-constrained-decoding.md`, `context-management.md`.
    and model acceptance remain outstanding; do not attach a call-only grammar to every request.
 2. **Parser hardening:** the phase-1 tolerant parser stays as the fallback when grammar is off or
    unsupported. Extend it with every failure seen in phase-1 recordings, each as a regression test.
-3. **Repository map** with tree-sitter (C, C++, Python, JavaScript/TypeScript, Rust, Go): files,
-   classes, functions, signatures, ranked by identifier overlap with the request and recent
-   history. Inserted **after** the stable prefix, never inside it.
+3. [x] **Repository map:** a bounded Tree-sitter index for C, C++, Python, JavaScript/TypeScript,
+   Rust and Go ranks declarations by identifier overlap with the request and recent history. It is
+   transient prompt context after the stable prefix and counts against the prompt budget (ADR-020).
+   Relevance, stale-map and prompt-injection behavior remain benchmark acceptance work.
 4. **Context manager:** token budget per tier, tool-output truncation, compaction only at task
    boundaries, recent turns kept verbatim.
 5. [x] **Prefix stability check:** `PLATYPUS_DEBUG_PREFIX=1` warns when the rendered stable system

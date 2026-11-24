@@ -1,4 +1,5 @@
 // Regression coverage for audit findings: safety, retries, parsing and subprocess lifetimes.
+#include "agent/repository_map.hpp"
 #include "core/codec.hpp"
 #include "core/execution_engine.hpp"
 #include "llm/chat_formatter.hpp"
@@ -382,6 +383,97 @@ TEST_CASE("GBNF generator rejects unsupported schema declarations") {
                                           {"properties", {{"path", {{"type", "array"}}}}}};
     REQUIRE_FALSE(llm::ToolGrammar::generate(tools, "json_tagged").is_ok());
     REQUIRE_FALSE(llm::ToolGrammar::generate(tools, "unknown").is_ok());
+}
+
+TEST_CASE("Repository map indexes and ranks six language families within its output budget") {
+    Workspace workspace;
+    auto put = [&](const std::string &path, const std::string &content) {
+        fs::create_directories((workspace.root / path).parent_path());
+        std::ofstream(workspace.root / path) << content;
+    };
+    put("src/math.c", "int calculate(int input) { return input; }\n");
+    put("src/runner.cpp", "class Runner { public: int run(int input) { return input; } };\n");
+    put("src/parser.py", "def parse_input(value):\n    return value\n");
+    put("src/render.js", "function render_view(value) { return value; }\n");
+    put("src/user.ts", "interface UserRecord { name: string; }\nfunction loadUser() {}\n");
+    put("src/component.tsx", "export function Component() { return <div />; }\n");
+    put("src/worker.rs", "struct Worker;\nfn execute_task() {}\n");
+    put("src/server.go", "type ServerRecord struct{}\nfunc ProcessRequest() {}\n");
+
+    auto map = agent::RepositoryMap::build(
+        workspace.root,
+        "calculate Runner run parse_input render_view UserRecord Component execute_task "
+        "ProcessRequest",
+        {}, 4096);
+    REQUIRE(map.is_ok());
+    INFO(map.value());
+    for (const auto &name : {"calculate", "Runner", "run", "parse_input", "render_view",
+                             "UserRecord", "Component", "execute_task", "ProcessRequest"})
+        REQUIRE(map.value().find(name) != std::string::npos);
+    REQUIRE(map.value().size() <= 4096);
+    REQUIRE_FALSE(agent::RepositoryMap::build(workspace.root, "run", {}, 4).is_ok());
+}
+
+TEST_CASE("Execution adds a transient repository map after the stable prefix and budgets it") {
+    struct CapturingBackend : llm::FakeBackend {
+        std::vector<std::pair<std::string, std::string>> sized_messages;
+        std::vector<std::pair<std::string, std::string>> generated_messages;
+
+        util::Result<llm::PromptSize>
+        count_prompt_tokens(const std::vector<std::pair<std::string, std::string>> &messages,
+                            std::stop_token stop) override {
+            sized_messages = messages;
+            return llm::LlmBackend::count_prompt_tokens(messages, stop);
+        }
+        util::Result<llm::CompletionResult> complete(const llm::CompletionRequest &request,
+                                                     llm::TokenCallback callback,
+                                                     std::stop_token stop) override {
+            generated_messages = request.messages;
+            return llm::LlmBackend::complete(request, std::move(callback), stop);
+        }
+    };
+    Workspace workspace;
+    std::ofstream(workspace.root / "alpha.cpp") << "class Alpha { public: void execute() {} };\n";
+    auto backend = std::make_shared<CapturingBackend>();
+    backend->set_script("map-task", {"Done"});
+    auto tools = std::make_shared<core::ToolRegistry>(workspace.root);
+    core::register_default_tools(*tools);
+    auto sessions = std::make_shared<session::Store>(workspace.root);
+    auto id = sessions->create("repository-map");
+    REQUIRE(id.is_ok());
+    core::ExecutionEngine engine(backend, tools);
+    REQUIRE(engine.attach_session(sessions, id.value()).is_ok());
+    REQUIRE(engine.run("map-task Alpha").is_ok());
+
+    REQUIRE(backend->sized_messages == backend->generated_messages);
+    REQUIRE(backend->generated_messages.size() >= 3);
+    REQUIRE(backend->generated_messages[0].first == "system");
+    REQUIRE(backend->generated_messages[1].first == "user");
+    REQUIRE(backend->generated_messages[1].second.find(
+                "Untrusted repository navigation metadata") != std::string::npos);
+    REQUIRE(backend->generated_messages[1].second.find("Alpha") != std::string::npos);
+    auto stored = sessions->load(id.value());
+    REQUIRE(stored.is_ok());
+    for (const auto &[role, content] : stored.value().second) {
+        static_cast<void>(role);
+        REQUIRE(content.find("Untrusted repository navigation metadata") == std::string::npos);
+    }
+}
+
+TEST_CASE("Repository map skips symlinks and dependency directories") {
+    Workspace workspace, outside;
+    const auto secret = "UnindexedExternalDeclaration";
+    std::ofstream(outside.root / "external.cpp") << "void " << secret << "() {}\n";
+    std::error_code error;
+    fs::create_symlink(outside.root / "external.cpp", workspace.root / "linked.cpp", error);
+    REQUIRE_FALSE(error);
+    fs::create_directories(workspace.root / "node_modules");
+    std::ofstream(workspace.root / "node_modules" / "dependency.cpp")
+        << "void " << secret << "() {}\n";
+
+    auto map = agent::RepositoryMap::build(workspace.root, secret, {});
+    REQUIRE(map.is_ok());
+    REQUIRE(map.value().find(secret) == std::string::npos);
 }
 
 TEST_CASE("Qwen arguments use declared types rather than guessing numeric-looking filenames") {

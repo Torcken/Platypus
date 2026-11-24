@@ -7,9 +7,11 @@ add_library(core STATIC
     ../tools/edit_format.cpp
     ../tools/tool.cpp
     ../agent/context_manager.cpp
+    ../agent/repository_map.cpp
     execution_engine.cpp
     ../session/store.cpp
 )
 
 target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(core PUBLIC llm util SQLite::SQLite3)
+target_include_directories(core PRIVATE ${tree_sitter_runtime_SOURCE_DIR}/lib/include)
+target_link_libraries(core PUBLIC llm util SQLite::SQLite3 tree_sitter_grammars)
