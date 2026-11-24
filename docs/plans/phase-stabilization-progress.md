@@ -46,6 +46,10 @@ Edit fuzz continuation: an exact-replacement libFuzzer entry, seed corpus, CI sm
 2,000 deterministic regression mutations are in place. Regex is excluded because `std::regex` does
 not guarantee bounded runtime. Local coverage-guided execution remains pending Clang/libFuzzer.
 
+Phase 2 continuation (ADR-017): the agent blocks the fourth identical tool action within a task,
+returns a corrective observation, and permits recovery with a different call. FakeBackend verifies
+the guard and successful recovery. Paired model-quality impact is not measured.
+
 Continuation: baseline provenance/comparison gates implemented (ADR-009); 32 Python tests passed.
 
 Native history continuation (ADR-010): typed tool observations, native declarations and response

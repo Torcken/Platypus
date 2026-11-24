@@ -60,6 +60,7 @@ util::Result<std::string> ExecutionEngine::run(const std::string &query, int max
     }
     append_turn("user", query);
     bool unresolved_error = false;
+    std::map<std::string, std::size_t> action_counts;
     for (int step = 0; step < max_steps; ++step) {
         if (stop.stop_requested())
             return Return::fail("Cancelled");
@@ -98,8 +99,15 @@ util::Result<std::string> ExecutionEngine::run(const std::string &query, int max
         }
         bool earlier_error = false;
         for (const auto &call : calls) {
+            auto action = call.tool_name + ":" + call.arguments.dump(-1, ' ', true);
+            auto occurrence = ++action_counts[action];
             auto result =
-                stop.stop_requested()
+                occurrence >= 4
+                    ? tools::ToolResult::fail(
+                          "Repeated identical action blocked on occurrence " +
+                          std::to_string(occurrence) +
+                          ". Inspect the previous results, choose a different action, or finish.")
+                : stop.stop_requested()
                     ? tools::ToolResult::fail("Cancelled before execution")
                     : (earlier_error
                            ? tools::ToolResult::fail("Not executed after an earlier tool error")

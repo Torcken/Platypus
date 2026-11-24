@@ -836,3 +836,46 @@ TEST_CASE("Fuzz entry survives deterministic mutations across all syntax familie
                     reinterpret_cast<const std::uint8_t *>(input.data()), input.size()) == 0);
     }
 }
+
+TEST_CASE("Agent blocks the fourth identical action and the model recovers") {
+    struct CapturingFake : llm::FakeBackend {
+        std::vector<std::vector<std::pair<std::string, std::string>>> prompts;
+        util::Result<std::vector<llm::ChatChunk>>
+        generate_chat(const std::vector<std::pair<std::string, std::string>> &messages, float temp,
+                      int max_tokens) override {
+            prompts.push_back(messages);
+            return llm::FakeBackend::generate_chat(messages, temp, max_tokens);
+        }
+    };
+    auto backend = std::make_shared<CapturingFake>();
+    const std::string repeated = R"({"tool_call":{"name":"probe","arguments":{"value":"same"}}})";
+    const std::string different =
+        R"({"tool_call":{"name":"probe","arguments":{"value":"different"}}})";
+    backend->set_script("loop-guard-task",
+                        {repeated, repeated, repeated, repeated, different, "Finished."});
+    auto registry = std::make_shared<core::ToolRegistry>();
+    int executions = 0;
+    registry->register_tool(
+        core::Tool{"probe", "Count a probe call.",
+                   nlohmann::json{{"type", "object"},
+                                  {"properties", {{"value", {{"type", "string"}}}}},
+                                  {"required", {"value"}},
+                                  {"additionalProperties", false}},
+                   [&](const nlohmann::json &, tools::ToolContext &) {
+                       ++executions;
+                       return tools::ToolResult::ok("probe completed");
+                   }});
+    core::ExecutionEngine engine(backend, registry);
+    auto result = engine.run("loop-guard-task");
+    REQUIRE(result.is_ok());
+    REQUIRE(result.value() == "Finished.");
+    REQUIRE(executions == 4);
+    bool saw_correction = false;
+    for (const auto &prompt : backend->prompts)
+        for (const auto &[role, content] : prompt)
+            if (role == "tool" &&
+                content.find("Repeated identical action blocked on occurrence 4") !=
+                    std::string::npos)
+                saw_correction = true;
+    REQUIRE(saw_correction);
+}

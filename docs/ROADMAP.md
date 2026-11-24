@@ -251,8 +251,8 @@ Concept docs: `grammar-constrained-decoding.md`, `context-management.md`.
    boundaries, recent turns kept verbatim.
 5. **Prefix stability check:** a debug mode that warns when the start of the prompt changes
    between turns. Unit test: two consecutive turns share the exact same prefix.
-6. **Loop guard:** detect repeated actions (same definition as phase 0) and inject a corrective
-   message.
+6. [x] **Loop guard:** block the fourth and later identical actions (same definition as phase 0)
+   and return a corrective observation (ADR-017).
 
 Exit criterion *(human)*: under 1 % invalid tool calls; at least +10 points of success rate over
 the best baseline; at least 30 % fewer prompt tokens per task. Each target counts as met only if
