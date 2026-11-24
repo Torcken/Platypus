@@ -8,7 +8,8 @@
 
 ## Deliverables
 - `src/core/codec.hpp` / `src/core/codec.cpp`: Parsing logic for tool calls.
-- `src/core/tools/`: Implementation of `read`, `write`, `list`, `grep`, `run`.
+- `src/tools/tool.hpp`, `registry.hpp`, `tool.cpp`, `builtins.cpp`: canonical Tool/ToolResult,
+  shared validation/output caps and the six tools `read`, `write`, `edit`, `list`, `grep`, `run`.
 - `src/core/execution_engine.cpp`: Refined loop logic.
 - `src/main.cpp`: Headless mode flag and integration.
 

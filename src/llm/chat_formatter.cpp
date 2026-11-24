@@ -25,7 +25,8 @@ std::string turn_prefix(const ModelProfile &profile, const std::string &role) {
 nlohmann::json observation(const std::string &content) {
     auto value = nlohmann::json::parse(content);
     if (!value.is_object() || !value.at("name").is_string() || !value.at("content").is_string() ||
-        !value.at("is_error").is_boolean())
+        !value.at("is_error").is_boolean() ||
+        (value.contains("truncated") && !value.at("truncated").is_boolean()))
         throw std::runtime_error("Invalid tool observation");
     return value;
 }
@@ -156,8 +157,10 @@ util::Result<std::string> ChatFormatter::visible_response(const std::string &res
 }
 
 std::string ChatFormatter::tool_observation(const std::string &name, const std::string &content,
-                                            bool is_error) {
-    return nlohmann::json{{"name", name}, {"content", content}, {"is_error", is_error}}.dump();
+                                            bool is_error, bool truncated) {
+    return nlohmann::json{
+        {"name", name}, {"content", content}, {"is_error", is_error}, {"truncated", truncated}}
+        .dump();
 }
 
 std::string ChatFormatter::tool_call_instruction(const std::string &syntax) {

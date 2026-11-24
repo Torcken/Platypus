@@ -16,9 +16,9 @@ void test_multi_step_plan_execution() {
 
     int executed = 0;
     tool_registry->register_tool({"dummy_tool", "Count a plan step", R"({"type":"object"})",
-                                  [&](const nlohmann::json &, util::SnapshotManager &) {
+                                  [&](const nlohmann::json &, tools::ToolContext &) {
                                       ++executed;
-                                      return util::Result<std::string>::ok("dummy output");
+                                      return tools::ToolResult::ok("dummy output");
                                   }});
     ExecutionEngine engine(backend, tool_registry, 10);
 

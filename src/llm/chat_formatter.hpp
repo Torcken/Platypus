@@ -26,7 +26,7 @@ class ChatFormatter {
                                                       const ModelProfile &profile);
     /// Serialize a tool result for the append-only log without treating it as a user instruction.
     static std::string tool_observation(const std::string &name, const std::string &content,
-                                        bool is_error);
+                                        bool is_error, bool truncated = false);
     /// Render one syntax family's call example and fixed native tool declarations.
     static std::string tool_call_instruction(const std::string &syntax);
     static std::string tool_definitions(const nlohmann::json &tools, const std::string &syntax);

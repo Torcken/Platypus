@@ -490,3 +490,125 @@ TEST_CASE("Engine reports a full context and stops before generation or mutation
     REQUIRE(seen->output_tokens == 2048);
     REQUIRE(seen->prompt_tokens == 16384);
 }
+
+TEST_CASE("Canonical tools validate arguments before executing and carry explicit status flags") {
+    Workspace workspace;
+    util::SnapshotManager snapshots(workspace.root);
+    tools::ToolContext context{snapshots};
+    int executions = 0;
+    tools::Tool tool{"example",
+                     "A test seam",
+                     {{"type", "object"},
+                      {"properties", {{"path", {{"type", "string"}}}}},
+                      {"required", {"path"}},
+                      {"additionalProperties", false}},
+                     [&](const nlohmann::json &, tools::ToolContext &) {
+                         ++executions;
+                         return tools::ToolResult::ok("observed");
+                     }};
+    REQUIRE(tool.name() == "example");
+    REQUIRE(tool.description() == "A test seam");
+    REQUIRE(tool.json_schema().at("required")[0] == "path");
+    for (const auto &args :
+         {nlohmann::json::array(), nlohmann::json::object(), nlohmann::json{{"path", 3}},
+          nlohmann::json{{"path", "x"}, {"extra", true}}})
+        REQUIRE(tool.execute(args, context).is_error);
+    REQUIRE(executions == 0);
+    auto result = tool.execute({{"path", "x"}}, context);
+    REQUIRE_FALSE(result.is_error);
+    REQUIRE_FALSE(result.truncated);
+    REQUIRE(result.content == "observed");
+    REQUIRE(executions == 1);
+    std::stop_source cancelled;
+    cancelled.request_stop();
+    snapshots.set_stop_token(cancelled.get_token());
+    REQUIRE(tool.execute({{"path", "x"}}, context).is_error);
+    REQUIRE(executions == 1);
+}
+
+TEST_CASE("Tool output caps preserve UTF-8 boundaries and replace invalid binary bytes") {
+    Workspace workspace;
+    util::SnapshotManager snapshots(workspace.root);
+    tools::ToolContext context{snapshots, 64};
+    std::string content = std::string(40, 'x');
+    for (int i = 0; i < 10; ++i)
+        content += "\xe2\x82\xac";
+    tools::Tool tool{"text", "Output test", {{"type", "object"}}, [&](const auto &, auto &) {
+                         return tools::ToolResult::ok(content);
+                     }};
+    auto result = tool.execute(nlohmann::json::object(), context);
+    REQUIRE(result.truncated);
+    REQUIRE_FALSE(result.is_error);
+    REQUIRE(result.content.size() <= context.max_output_bytes);
+    REQUIRE(result.content.starts_with(std::string(40, 'x') + "\xe2\x82\xac"));
+    REQUIRE(result.content.ends_with("\n[output truncated]"));
+    REQUIRE(nlohmann::json::parse(nlohmann::json(result.content).dump()) == result.content);
+    content = "\xff\x80";
+    result = tool.execute(nlohmann::json::object(), context);
+    REQUIRE_FALSE(result.truncated);
+    REQUIRE(result.content == "\xef\xbf\xbd\xef\xbf\xbd");
+    // Invalid overlong, surrogate and out-of-range sequences are never allowed into JSON.
+    for (const auto *bytes : {"\xc0\x80", "\xed\xa0\x80", "\xf4\x90\x80\x80"}) {
+        content = bytes;
+        result = tool.execute(nlohmann::json::object(), context);
+        REQUIRE(nlohmann::json::parse(nlohmann::json(result.content).dump()) == result.content);
+    }
+    content = std::string(100, 'x');
+    for (std::size_t limit = 0; limit < 24; ++limit) {
+        context.max_output_bytes = limit;
+        result = tool.execute(nlohmann::json::object(), context);
+        REQUIRE(result.truncated);
+        REQUIRE(result.content.size() <= limit);
+    }
+}
+
+TEST_CASE("Tool errors and exceptions are bounded without losing their status") {
+    Workspace workspace;
+    util::SnapshotManager snapshots(workspace.root);
+    tools::ToolContext context{snapshots, 100};
+    tools::Tool error{"error", "Error test", {{"type", "object"}}, [](const auto &, auto &) {
+                          return tools::ToolResult::fail(std::string(200, 'e'));
+                      }};
+    auto result = error.execute(nlohmann::json::object(), context);
+    REQUIRE(result.is_error);
+    REQUIRE(result.truncated);
+    REQUIRE(result.content.size() == context.max_output_bytes);
+    tools::Tool throwing{"throw",
+                         "Exception test",
+                         {{"type", "object"}},
+                         [](const auto &, auto &) -> tools::ToolResult {
+                             throw std::runtime_error("handler failed");
+                         }};
+    result = throwing.execute(nlohmann::json::object(), context);
+    REQUIRE(result.is_error);
+    REQUIRE(result.content == "handler failed");
+}
+
+TEST_CASE("Read observations retain truncation status in the append-only session") {
+    Workspace workspace;
+    std::ofstream(workspace.root / "large") << std::string(5998, 'x') << "\xe2\x82\xac\n";
+    auto registry = std::make_shared<core::ToolRegistry>(workspace.root);
+    core::register_default_tools(*registry);
+    auto observed = registry->execute_tool("read", {{"path", "large"}});
+    REQUIRE_FALSE(observed.is_error);
+    REQUIRE(observed.truncated);
+    REQUIRE(observed.content.size() <= 6000);
+    auto backend = std::make_shared<llm::FakeBackend>();
+    backend->set_script("read-task",
+                        {R"({"tool_call":{"name":"read","arguments":{"path":"large"}}})", "Done"});
+    auto store = std::make_shared<session::Store>(workspace.root);
+    auto id = store->create("read");
+    REQUIRE(id.is_ok());
+    core::ExecutionEngine engine(backend, registry);
+    REQUIRE(engine.attach_session(store, id.value()).is_ok());
+    REQUIRE(engine.run("read-task").is_ok());
+    auto history = store->load(id.value());
+    REQUIRE(history.is_ok());
+    bool seen = false;
+    for (const auto &[role, content] : history.value().second)
+        if (role == "tool") {
+            seen = true;
+            REQUIRE(nlohmann::json::parse(content).at("truncated") == true);
+        }
+    REQUIRE(seen);
+}

@@ -42,12 +42,12 @@ util::Result<std::string> ExecutionEngine::run(const std::string &query, int max
     auto schemas = nlohmann::json::object();
     auto tools = nlohmann::json::array();
     for (const auto &tool : tool_registry_->get_all_tools()) {
-        schemas[tool.name] = nlohmann::json::parse(tool.schema_json);
+        schemas[tool.name()] = tool.json_schema();
         tools.push_back({{"type", "function"},
                          {"function",
-                          {{"name", tool.name},
-                           {"description", tool.description},
-                           {"parameters", schemas[tool.name]}}}});
+                          {{"name", tool.name()},
+                           {"description", tool.description()},
+                           {"parameters", schemas[tool.name()]}}}});
     }
     auto history = context_manager_->get_history();
     if (history.empty()) {
@@ -100,16 +100,15 @@ util::Result<std::string> ExecutionEngine::run(const std::string &query, int max
         for (const auto &call : calls) {
             auto result =
                 stop.stop_requested()
-                    ? util::Result<std::string>::fail("Cancelled before execution")
-                    : (earlier_error ? util::Result<std::string>::fail(
-                                           "Not executed after an earlier tool error")
-                                     : tool_registry_->execute(call.tool_name, call.arguments));
-            earlier_error = earlier_error || !result.is_ok();
+                    ? tools::ToolResult::fail("Cancelled before execution")
+                    : (earlier_error
+                           ? tools::ToolResult::fail("Not executed after an earlier tool error")
+                           : tool_registry_->execute_tool(call.tool_name, call.arguments));
+            earlier_error = earlier_error || result.is_error;
             unresolved_error = earlier_error;
             append_turn("tool",
-                        llm::ChatFormatter::tool_observation(
-                            call.tool_name, result.is_ok() ? result.value() : result.error(),
-                            !result.is_ok()));
+                        llm::ChatFormatter::tool_observation(call.tool_name, result.content,
+                                                             result.is_error, result.truncated));
         }
         if (stop.stop_requested())
             return Return::fail("Cancelled");

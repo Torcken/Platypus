@@ -16,16 +16,11 @@ void test_execution_engine_loop() {
     auto tool_registry = std::make_shared<ToolRegistry>();
 
     // Define a simple tool
-    Tool echo_tool;
-    echo_tool.name = "echo";
-    echo_tool.description = "Echoes the input string.";
-    echo_tool.schema_json =
-        "{\"type\": \"object\", \"properties\": {\"message\": {\"type\": \"string\"}}}";
-    echo_tool.execute =
-        [](const nlohmann::json &args,
-           platypus::util::SnapshotManager &) -> platypus::util::Result<std::string> {
-        return platypus::util::Result<std::string>::ok(args["message"].get<std::string>());
-    };
+    Tool echo_tool{"echo", "Echoes the input string.",
+                   R"({"type":"object","properties":{"message":{"type":"string"}}})",
+                   [](const nlohmann::json &args, platypus::tools::ToolContext &) {
+                       return platypus::tools::ToolResult::ok(args["message"].get<std::string>());
+                   }};
     tool_registry->register_tool(echo_tool);
 
     ExecutionEngine engine(std::move(backend), tool_registry);

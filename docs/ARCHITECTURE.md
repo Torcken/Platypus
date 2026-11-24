@@ -12,7 +12,7 @@ flowchart LR
     B --> Fake[FakeBackend fixtures]
     E --> C[agent::ContextManager / budget and append-only turns]
     C --> B
-    E --> T[ToolRegistry / six tools]
+    E --> T[tools::ToolRegistry / six tools]
     E --> S[SQLite session log]
     T --> A[SnapshotManager / approvals]
     A --> G[shadow Git snapshots]
@@ -22,7 +22,8 @@ flowchart LR
 A turn starts with fixed system instructions and tool definitions. User requests and responses
 append to history; a profile renders raw `/completion` prompts or the generic transport uses
 `/v1/chat/completions`. The selected syntax codec extracts calls. ToolRegistry validates flat
-arguments, executes one action at a time, caps outputs, and returns errors for model recovery.
+arguments and executes one action at a time. `tools::Tool` returns explicit error/truncation flags;
+its common boundary sanitizes UTF-8 and caps successful and failed observations for model recovery.
 The context manager reserves reply space before generation. Native profiles tokenize the rendered
 prompt with the inference server; generic chat uses a labelled byte estimate. Full budgets and
 tokenizer failures stop before generation without removing turns. The terminal receives copied
@@ -39,7 +40,7 @@ them in order without duplicating records. The terminal runs generation on one j
 wakes the UI with PostEvent, and waits on a cancellable condition variable for approvals.
 
 Start reading `src/main.cpp`, then `src/core/execution_engine.cpp`,
-`src/agent/context_manager.cpp`, `src/core/tools.cpp`, and
+`src/agent/context_manager.cpp`, `src/tools/builtins.cpp`, `src/tools/tool.cpp`, and
 `src/util/snapshot.cpp`. Tests in `tests/unit/regression_tests.cpp` cover the audit findings;
 `tests/integration/test_cli.py` exercises the executable through a real loopback HTTP fixture.
 

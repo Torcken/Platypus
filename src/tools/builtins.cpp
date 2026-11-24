@@ -1,15 +1,15 @@
 // Six bounded tools share workspace resolution, approvals and durable snapshots.
 // The registry converts exceptions and truncates output before the loop appends it to history.
 #include "platform/process.hpp"
-#include "tool.hpp"
+#include "registry.hpp"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <regex>
 #include <sstream>
-namespace platypus::core {
+namespace platypus::tools {
 namespace fs = std::filesystem;
-using Return = util::Result<std::string>;
+using Return = tools::ToolResult;
 namespace {
 std::string schema(nlohmann::json properties, nlohmann::json required) {
     return nlohmann::json{{"type", "object"},
@@ -76,7 +76,8 @@ void register_filesystem_tools(ToolRegistry &registry) {
                                     {"start_line", {{"type", "integer"}}},
                                     {"end_line", {{"type", "integer"}}}},
                                    {"path"}),
-                            [](const nlohmann::json &args, util::SnapshotManager &sm) -> Return {
+                            [](const nlohmann::json &args, tools::ToolContext &context) -> Return {
+                                auto &sm = context.snapshots;
                                 auto path = sm.resolve(args.at("path").get<std::string>());
                                 if (!path.is_ok())
                                     return Return::fail(path.error());
@@ -92,11 +93,8 @@ void register_filesystem_tools(ToolRegistry &registry) {
                                 while (std::getline(input, line) && ++number <= end) {
                                     if (number >= start)
                                         result += std::to_string(number) + ": " + line + "\n";
-                                    if (result.size() > 6000) {
-                                        result.resize(6000);
-                                        result += "\n[output truncated]";
+                                    if (result.size() > context.max_output_bytes)
                                         break;
-                                    }
                                 }
                                 return Return::ok(result);
                             }});
@@ -106,7 +104,8 @@ void register_filesystem_tools(ToolRegistry &registry) {
                  {"recursive", {{"type", "boolean"}}},
                  {"pattern", {{"type", "string"}}}},
                 {}),
-         [](const nlohmann::json &args, util::SnapshotManager &sm) -> Return {
+         [](const nlohmann::json &args, tools::ToolContext &context) -> Return {
+             auto &sm = context.snapshots;
              std::string expression;
              for (char c : args.value("pattern", std::string("*"))) {
                  if (c == '*')
@@ -125,11 +124,8 @@ void register_filesystem_tools(ToolRegistry &registry) {
                   entries(sm, args.value("path", "."), args.value("recursive", false))) {
                  if (std::regex_match(path.filename().string(), pattern))
                      result += fs::relative(path, sm.root()).string() + "\n";
-                 if (result.size() > 6000) {
-                     result.resize(6000);
-                     result += "\n[output truncated]";
+                 if (result.size() > context.max_output_bytes)
                      break;
-                 }
              }
              return Return::ok(result);
          }});
@@ -137,9 +133,11 @@ void register_filesystem_tools(ToolRegistry &registry) {
         {"write", "Create or replace a file after diff approval and snapshot.",
          schema({{"path", {{"type", "string"}}}, {"content", {{"type", "string"}}}},
                 {"path", "content"}),
-         [](const nlohmann::json &args, util::SnapshotManager &sm) {
-             return sm.write(args.at("path").get<std::string>(),
-                             args.at("content").get<std::string>());
+         [](const nlohmann::json &args, tools::ToolContext &context) -> Return {
+             auto &sm = context.snapshots;
+             auto result = sm.write(args.at("path").get<std::string>(),
+                                    args.at("content").get<std::string>());
+             return result.is_ok() ? Return::ok(result.value()) : Return::fail(result.error());
          }});
     registry.register_tool(
         {"edit", "Replace exact text in one file or a directory after approval.",
@@ -149,7 +147,8 @@ void register_filesystem_tools(ToolRegistry &registry) {
                  {"use_regex", {{"type", "boolean"}}},
                  {"recursive", {{"type", "boolean"}}}},
                 {"path", "old_string", "new_string"}),
-         [](const nlohmann::json &args, util::SnapshotManager &sm) -> Return {
+         [](const nlohmann::json &args, tools::ToolContext &context) -> Return {
+             auto &sm = context.snapshots;
              auto target = sm.resolve(args.at("path").get<std::string>());
              if (!target.is_ok())
                  return Return::fail(target.error());
@@ -199,7 +198,8 @@ void register_search_tools(ToolRegistry &registry) {
                  {"pattern", {{"type", "string"}}},
                  {"recursive", {{"type", "boolean"}}}},
                 {"pattern"}),
-         [](const nlohmann::json &args, util::SnapshotManager &sm) -> Return {
+         [](const nlohmann::json &args, tools::ToolContext &context) -> Return {
+             auto &sm = context.snapshots;
              std::regex pattern(args.at("pattern").get<std::string>());
              std::string result;
              for (const auto &path :
@@ -214,10 +214,8 @@ void register_search_tools(ToolRegistry &registry) {
                      if (std::regex_search(line, pattern))
                          result += fs::relative(path, sm.root()).string() + ":" +
                                    std::to_string(number) + ": " + line + "\n";
-                     if (result.size() > 6000) {
-                         result.resize(6000);
-                         return Return::ok(result + "\n[output truncated]");
-                     }
+                     if (result.size() > context.max_output_bytes)
+                         return Return::ok(result);
                  }
              }
              return Return::ok(result);
@@ -228,14 +226,16 @@ void register_shell_tools(ToolRegistry &registry) {
         {"run", "Run an explicitly approved shell command with timeout and output limit.",
          schema({{"command", {{"type", "string"}}}, {"timeout_s", {{"type", "integer"}}}},
                 {"command"}),
-         [](const nlohmann::json &args, util::SnapshotManager &sm) -> Return {
+         [](const nlohmann::json &args, tools::ToolContext &context) -> Return {
+             auto &sm = context.snapshots;
              auto command = args.at("command").get<std::string>();
              int timeout = args.value("timeout_s", 30);
              if (command.empty() || timeout < 1 || timeout > 300)
                  return Return::fail("Invalid command or timeout (1..300 seconds)");
              auto preview = "Command: " + command + "\nDirectory: " + sm.root().string() +
                             "\nTimeout: " + std::to_string(timeout) +
-                            " seconds\nOutput cap: 6000 bytes\n";
+                            " seconds\nOutput cap: " + std::to_string(context.max_output_bytes) +
+                            " bytes\n";
              if (!sm.confirm(preview))
                  return Return::fail("Permission denied");
              auto saved = sm.take_snapshot("Before command: " + command);
@@ -245,15 +245,16 @@ void register_shell_tools(ToolRegistry &registry) {
              log << nlohmann::json{{"action", "run"}, {"command", command}, {"timeout_s", timeout}}
                         .dump()
                  << '\n';
-             auto result =
-                 platform::run_process({"/bin/sh", "-c", command}, sm.root(),
-                                       std::chrono::seconds(timeout), 6000, sm.stop_token());
+             auto result = platform::run_process({"/bin/sh", "-c", command}, sm.root(),
+                                                 std::chrono::seconds(timeout),
+                                                 context.max_output_bytes, sm.stop_token());
              if (!result.is_ok())
                  return Return::fail(result.error());
              if (result.value().exit_code != 0)
-                 return Return::fail("Exit code " + std::to_string(result.value().exit_code) +
-                                     "\n" + result.value().output);
-             return Return::ok(result.value().output);
+                 return {"Exit code " + std::to_string(result.value().exit_code) + "\n" +
+                             result.value().output,
+                         true, result.value().truncated};
+             return {result.value().output, false, result.value().truncated};
          }});
 }
 void register_default_tools(ToolRegistry &registry) {
@@ -261,4 +262,4 @@ void register_default_tools(ToolRegistry &registry) {
     register_search_tools(registry);
     register_shell_tools(registry);
 }
-} // namespace platypus::core
+} // namespace platypus::tools

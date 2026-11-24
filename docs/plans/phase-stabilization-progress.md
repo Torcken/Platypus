@@ -41,3 +41,9 @@ explicit generic estimates, reply reservations and a mutex-protected terminal st
 Boundary/cancellation/error tests and a task-submitting PTY test pass. Verification: configure,
 build and CTest on dev/ASan/UBSan each passed 9/9; Python unittest passed 41/41. Next: canonical
 Tool/ToolResult and SnapshotStore, edit/fuzz interfaces, and remaining lint/real-model checks.
+
+Tool continuation (ADR-013): canonical Tool/ToolResult/ToolContext, registry and built-ins migrated
+to src/tools/. Success and error text is capped inside a UTF-8 boundary; invalid bytes are replaced,
+and error/truncation flags survive session persistence. Dev, ASan and UBSan configure/build and
+CTest each passed 9/9; Python unittest passed 41/41. One intermediate overlapping dev rebuild
+failed to link; the subsequent build and complete verification passed. SnapshotStore is next.
