@@ -1,5 +1,6 @@
 // Six bounded tools share workspace resolution, approvals and durable snapshots.
 // The registry converts exceptions and truncates output before the loop appends it to history.
+#include "edit_format.hpp"
 #include "platform/process.hpp"
 #include "registry.hpp"
 #include <algorithm>
@@ -54,20 +55,6 @@ std::vector<fs::path> entries(safety::SnapshotStore &sm, const std::string &path
             consider(entry.path());
     std::sort(paths.begin(), paths.end());
     return paths;
-}
-std::string replace(std::string content, const std::string &old, const std::string &replacement) {
-    if (old.empty())
-        throw std::runtime_error("old_string is required");
-    std::size_t cursor = 0;
-    bool matched = false;
-    while ((cursor = content.find(old, cursor)) != std::string::npos) {
-        content.replace(cursor, old.size(), replacement);
-        cursor += replacement.size();
-        matched = true;
-    }
-    if (!matched)
-        throw std::runtime_error("Could not find the specified string in the file");
-    return content;
 }
 } // namespace
 void register_filesystem_tools(ToolRegistry &registry) {
@@ -145,6 +132,7 @@ void register_filesystem_tools(ToolRegistry &registry) {
                  {"old_string", {{"type", "string"}}},
                  {"new_string", {{"type", "string"}}},
                  {"use_regex", {{"type", "boolean"}}},
+                 {"format", {{"type", "string"}}},
                  {"recursive", {{"type", "boolean"}}}},
                 {"path", "old_string", "new_string"}),
          [](const nlohmann::json &args, tools::ToolContext &context) -> Return {
@@ -156,28 +144,24 @@ void register_filesystem_tools(ToolRegistry &registry) {
              auto old = args.at("old_string").get<std::string>();
              if (old.empty())
                  return Return::fail("old_string is required");
+             auto format_name =
+                 args.value("format", args.value("use_regex", false) ? "regex" : "exact");
+             auto format = make_edit_format(format_name);
+             if (!format)
+                 return Return::fail("Unsupported edit format; choose exact or regex");
              bool directory = fs::is_directory(target.value());
              for (const auto &path :
                   entries(sm, target.value().string(), args.value("recursive", false))) {
                  if (!fs::is_regular_file(path))
                      continue;
                  auto before = read_text(path);
-                 std::string after;
-                 if (args.value("use_regex", false)) {
-                     std::regex pattern(old);
-                     if (!std::regex_search(before, pattern)) {
-                         if (directory)
-                             continue;
-                         return Return::fail("No matching text");
-                     }
-                     after = std::regex_replace(before, pattern,
-                                                args.at("new_string").get<std::string>());
-                 } else {
-                     if (before.find(old) == std::string::npos && directory)
+                 auto after = format->apply(before, old, args.at("new_string").get<std::string>());
+                 if (!after.is_ok()) {
+                     if (directory && after.error() == "No matching text")
                          continue;
-                     after = replace(before, old, args.at("new_string").get<std::string>());
+                     return Return::fail(after.error());
                  }
-                 changes.emplace_back(fs::relative(path, sm.root()).string(), after);
+                 changes.emplace_back(fs::relative(path, sm.root()).string(), after.value());
              }
              if (changes.empty())
                  return Return::fail("No matching text");

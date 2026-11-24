@@ -7,7 +7,9 @@
 - [x] Original test files registered; assertions remain enabled in every preset.
 - [x] Canonical agent::ContextManager budgets rendered prompts, reserves replies and rejects
   overflow without changing history; tokenizer failures stop generation (ADR-012).
-- [ ] EditFormat interface and unambiguous fuzzy edit implementation selected by benchmark evidence.
+- [x] EditFormat strategy boundary with exact and regex implementations; legacy use_regex arguments
+  remain compatible.
+- [ ] Fuzzy matching and default selection: benchmark evidence is required before activation.
 - [x] Streaming OpenAI tool-call deltas are assembled by index and emitted as one canonical agent
   payload; incomplete batches fail closed (tested against the loopback HTTP fixture).
 - [x] Bounded native/JSON parser, duplicate/depth checks, full Gemma batches and no embedded-JSON

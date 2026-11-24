@@ -204,8 +204,8 @@ phase-0 baseline at the same model and tier, and two weeks of real use with no l
    checks, adversarial regressions and a libFuzzer entry/corpus/CI job. Actual local coverage-guided
    fuzzing remains unavailable until Clang/libFuzzer is installed.
 - [x] Six bounded tools (`read`, `list`, `grep`, `edit`, `write`, `run`) with project-root
-   containment, approval, snapshots, output limits and error recovery. Remaining: ripgrep-backed
-   search plus benchmark-gated `EditFormat`/fuzzy matching.
+   containment, approval, snapshots, output limits and error recovery. Search is ripgrep-backed.
+   The `EditFormat` strategy supports exact and regex; fuzzy matching waits for benchmark evidence.
 - [x] Agent loop builds prompts, generates, parses/executes calls and appends observations; it stops
    on a final answer or after a configurable 25-step bound. Canonical context budgeting now counts
    rendered prompts, reserves reply tokens and fails closed on tokenizer errors (ADR-012).

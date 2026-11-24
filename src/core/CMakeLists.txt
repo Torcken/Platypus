@@ -4,6 +4,7 @@ project(platypus_core)
 add_library(core STATIC
     codec.cpp
     ../tools/builtins.cpp
+    ../tools/edit_format.cpp
     ../tools/tool.cpp
     ../agent/context_manager.cpp
     execution_engine.cpp

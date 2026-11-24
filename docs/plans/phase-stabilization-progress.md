@@ -33,6 +33,11 @@ Search continuation: `grep` now invokes ripgrep with an argv vector (no shell in
 the recursive flag, excludes Platypus/Git state, and preserves capped-output status. README records
 the runtime `rg` dependency. Dev, ASan and UBSan each passed 9/9 CTest groups; Python passed 41/41.
 
+Edit continuation: a typed `EditFormat` strategy now owns exact and regex replacement behavior,
+while the existing `use_regex` argument remains supported. Unknown formats (including fuzzy) fail
+without a write; fuzzy rollout awaits the phase-0 model comparison. Dev, ASan and UBSan each passed
+9/9 CTest groups; Python passed 41/41.
+
 Continuation: baseline provenance/comparison gates implemented (ADR-009); 32 Python tests passed.
 
 Native history continuation (ADR-010): typed tool observations, native declarations and response

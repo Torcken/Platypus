@@ -1,11 +1,27 @@
 #include "../util/result.hpp"
 #include "core/tool.hpp"
+#include "tools/edit_format.hpp"
 #include <cassert>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 
 namespace platypus::core {
+
+void test_edit_format_interface() {
+    auto exact = tools::make_edit_format("exact");
+    assert(exact);
+    auto exact_result = exact->apply("item item", "item", "entry");
+    assert(exact_result.is_ok() && exact_result.value() == "entry entry");
+
+    auto regex = tools::make_edit_format("regex");
+    assert(regex);
+    auto regex_result = regex->apply("item1 item2", R"(item\d)", "entry");
+    assert(regex_result.is_ok() && regex_result.value() == "entry entry");
+    assert(!regex->apply("content", "", "insert").is_ok());
+
+    assert(!tools::make_edit_format("fuzzy"));
+}
 
 void test_find_tool() {
     ToolRegistry registry(std::filesystem::current_path(), [](const auto &) { return true; });
@@ -82,6 +98,7 @@ void test_grep_tool() {
 } // namespace platypus::core
 
 int main() {
+    platypus::core::test_edit_format_interface();
     platypus::core::test_find_tool();
     platypus::core::test_multi_replace_tool();
     platypus::core::test_grep_tool();
