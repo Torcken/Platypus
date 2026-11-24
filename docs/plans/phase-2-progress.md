@@ -7,7 +7,10 @@
 - [ ] Real-recording parser regression corpus.
 - [x] Bounded ranked Tree-sitter map for C, C++, Python, JavaScript/TypeScript, Rust and Go; added
   to the transient prompt after the stable prefix and included in token sizing (ADR-020).
-- [ ] Measure map relevance, per-tier context settings and task-boundary compaction behavior.
+- [x] Profile-sized context budget and task-boundary summary compaction; durable session history is
+  retained and summaries count as transient prompt context.
+- [ ] Real-recording parser regressions, map relevance, measured per-tier settings, and paired
+  compaction outcomes.
 - [x] Opt-in runtime stable-prefix diagnostics and exact native prefix regressions.
 - [x] Fourth-and-later identical actions are blocked with a corrective tool observation (ADR-017).
 - [ ] Human paired benchmark exit measurements.

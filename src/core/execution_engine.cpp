@@ -40,6 +40,9 @@ util::Result<std::string> ExecutionEngine::run(const std::string &query, int max
         return Return::fail("Invalid task or step limit");
     tool_registry_->snapshots().set_stop_token(stop);
     backend_->set_stop_token(stop);
+    context_manager_->update();
+    if (stop.stop_requested())
+        return Return::fail("Cancelled");
     auto profile = backend_->profile();
     auto syntax = profile ? profile->tool_syntax : "json_tagged";
     auto schemas = nlohmann::json::object();
@@ -81,7 +84,7 @@ util::Result<std::string> ExecutionEngine::run(const std::string &query, int max
     for (int step = 0; step < max_steps; ++step) {
         if (stop.stop_requested())
             return Return::fail("Cancelled");
-        auto messages = context_manager_->get_history();
+        auto messages = context_manager_->get_prompt_history();
         if (!map_message.empty()) {
             auto position = messages.begin();
             if (position != messages.end() && position->first == "system")

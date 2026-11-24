@@ -249,8 +249,9 @@ Concept docs: `grammar-constrained-decoding.md`, `context-management.md`.
    Rust and Go ranks declarations by identifier overlap with the request and recent history. It is
    transient prompt context after the stable prefix and counts against the prompt budget (ADR-020).
    Relevance, stale-map and prompt-injection behavior remain benchmark acceptance work.
-4. **Context manager:** token budget per tier, tool-output truncation, compaction only at task
-   boundaries, recent turns kept verbatim.
+4. [x] **Context manager:** budgets follow the selected profile, tool outputs stay bounded, and
+   oversized history is summarized only at a task boundary while the stable prefix and latest
+   messages remain verbatim. Measured per-tier settings and paired compaction outcomes remain open.
 5. [x] **Prefix stability check:** `PLATYPUS_DEBUG_PREFIX=1` warns when the rendered stable system
    prefix changes between generations; native tests assert the stable prefix and diagnostic.
 6. [x] **Loop guard:** block the fourth and later identical actions (same definition as phase 0)

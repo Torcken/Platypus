@@ -64,6 +64,9 @@ class ContextManager {
      */
     std::vector<std::pair<std::string, std::string>> get_history() const;
 
+    /// Returns prompt history with any compacted summary as transient, untrusted context.
+    std::vector<std::pair<std::string, std::string>> get_prompt_history() const;
+
     /**
      * @brief Returns the current context summary.
      */

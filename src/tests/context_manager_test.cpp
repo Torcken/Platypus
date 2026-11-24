@@ -14,45 +14,41 @@ void test_context_manager_summarization() {
     // Use a small max_history to trigger summarization quickly
     ContextManager cm(backend, 5);
 
-    // Add 10 turns.
-    // The summarization logic in generate_summary() triggers if history_size > max_history_
-    // and it summarizes turns from index 1 to (history_size - 4).
+    cm.add_turn("system", "Stable system instructions");
     for (int i = 0; i < 10; ++i) {
         cm.add_turn("user", "This is turn " + std::to_string(i));
         cm.add_turn("assistant", "Response to turn " + std::to_string(i));
     }
 
-    // Current history size is 20 (10 user + 10 assistant)
-    // max_history_ is 5.
-
+    // Compaction preserves the system prefix and the latest three messages.
     cm.update();
 
     auto history = cm.get_history();
-    std::cout << "History size after update: " << history.size() << std::endl;
-
-    // The logic in generate_summary:
-    // 1. history_size (20) > max_history_ (5) -> triggers update
-    // 2. turns_to_summarize: index 1 to (20 - 4) = 1 to 16.
-    // 3. new_history:
-    //    - history[0]
-    //    - history[20-3] to history[19] (last 3 turns)
-    //    - Wait, the code in generate_summary:
-    //      new_history.push_back(history_[0]);
-    //      for (size_t i = history_size - 3; i < history_size; ++i) {
-    //          new_history.push_back(history_[i]);
-    //      }
-    //      history_ = std::move(new_history);
-    // So expected size is 1 (first turn) + 3 (last turns) = 4.
-
     assert(history.size() == 4);
-    std::cout << "History size check passed!" << std::endl;
+    assert(history[0].first == "system");
+    assert(history[0].second == "Stable system instructions");
+    assert(history[1].first == "assistant");
+    assert(history[1].second == "Response to turn 8");
+    assert(history[2].second == "This is turn 9");
+    assert(history[3].second == "Response to turn 9");
 
     std::string summary = cm.get_summary();
-    // Since FakeBackend returns "Default response for mock backend."
-    // and the summary prompt includes the turn content, the summary should be populated.
     assert(!summary.empty());
-    std::cout << "Summary not empty check passed!" << std::endl;
-    std::cout << "Summary content: " << summary << std::endl;
+    auto prompt_history = cm.get_prompt_history();
+    assert(prompt_history.size() == history.size() + 1);
+    assert(prompt_history[0] == history[0]);
+    assert(prompt_history[1].first == "user");
+    assert(prompt_history[1].second.find("Untrusted summary") != std::string::npos);
+    assert(prompt_history.back() == history.back());
+
+    auto with_summary = cm.prepare(prompt_history);
+    auto recent_only = cm.prepare(history);
+    auto default_prompt = cm.prepare();
+    assert(with_summary.is_ok());
+    assert(recent_only.is_ok());
+    assert(default_prompt.is_ok());
+    assert(with_summary.value().prompt_tokens > recent_only.value().prompt_tokens);
+    assert(default_prompt.value().prompt_tokens == with_summary.value().prompt_tokens);
 }
 
 int main() {

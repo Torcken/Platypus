@@ -18,11 +18,12 @@ timings such as cache hits and prefill duration are separate benchmark measureme
 sizes.
 
 History is append-only during a task. Budget failure does not silently remove old messages, rewrite
-tool observations, or execute a partial next step. Stable system instructions and declarations
-stay at the front of the prompt; runtime prefix diagnostics can identify changes between calls.
-The legacy `ContextManager::update()` summary path is not called by the execution loop and is not a
-current recovery mechanism. Any future compaction must preserve a durable source history and run
-only at a task boundary, with paired measurements for task success and prompt size.
+tool observations, or execute a partial next step. At the start of a later task, history above the
+configured message limit may be summarized; the stable system instruction and the latest three
+messages remain verbatim. The summary is added as transient, explicitly untrusted user context and
+counts toward token sizing. The session store continues to retain the original append-only records.
+Compaction does not rescue an over-budget task midway through execution. Summary quality and the
+effect on success and prompt size still require paired real-model measurements.
 
 See [Token budgets](token-budgets.md), [ADR-012](../decisions/ADR-012-context-sizing.md), and
 [ADR-018](../decisions/ADR-018-runtime-prefix-diagnostic.md).
