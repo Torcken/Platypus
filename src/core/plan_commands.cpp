@@ -1,8 +1,11 @@
 // Interactive plan commands share validation and approval rules across CLI and TUI.
 #include "plan_commands.hpp"
 #include "plan_store.hpp"
+#include "project_checks.hpp"
 #include <charconv>
 #include <cstddef>
+#include <iomanip>
+#include <sstream>
 
 namespace platypus::core {
 namespace {
@@ -110,7 +113,22 @@ std::optional<std::string> handle_plan_command(const std::string &input,
             bundle += "No workspace changes since the milestone baseline.\n";
         else
             bundle += diff.value();
-        bundle += "\n## Checks\n\nNo check results are stored in this plan yet.\n";
+        bundle += "\n## Checks from the latest task\n\n";
+        auto check_records = ProjectChecks::load_results(workspace.root());
+        if (!check_records.is_ok()) {
+            bundle += "Check results unavailable: " + check_records.error() + "\n";
+        } else if (check_records.value().empty()) {
+            bundle += "No project check results are stored yet.\n";
+        } else {
+            for (const auto &record : check_records.value()) {
+                std::ostringstream quoted_name;
+                quoted_name << std::quoted(record.name);
+                bundle += "- " + quoted_name.str() + ": " + record.status;
+                if (record.has_exit_code)
+                    bundle += " (exit " + std::to_string(record.exit_code) + ")";
+                bundle += "\n";
+            }
+        }
         bundle += "\n## Decisions\n\nNo milestone decisions are recorded yet.\n";
         if (bundle.size() > kMaxReviewBytes) {
             bundle.resize(kMaxReviewBytes - 32);

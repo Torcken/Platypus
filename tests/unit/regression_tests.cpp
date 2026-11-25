@@ -166,7 +166,7 @@ TEST_CASE("Interactive plan commands validate and confirm plan mutations") {
     REQUIRE(review.has_value());
     REQUIRE(review->find("Milestone Review: Implement") != std::string::npos);
     REQUIRE(review->find("implementation.cpp") != std::string::npos);
-    REQUIRE(review->find("No check results are stored") != std::string::npos);
+    REQUIRE(review->find("No project check results are stored") != std::string::npos);
     REQUIRE(core::handle_plan_command("/done TASK-0001", store)->find("Completed") !=
             std::string::npos);
     REQUIRE(approvals == 3);
@@ -265,6 +265,12 @@ commands = [{name = "unit", argv = ["python3", "-c", "import sys; print('check-f
     REQUIRE_FALSE(result.is_ok());
     REQUIRE(result.error().find("after three attempts") != std::string::npos);
     REQUIRE(approvals == 3);
+    auto records = core::ProjectChecks::load_results(workspace.root);
+    REQUIRE(records.is_ok());
+    REQUIRE(records.value().size() == 3);
+    REQUIRE(records.value().back().status == "failed");
+    REQUIRE(records.value().back().has_exit_code);
+    REQUIRE(records.value().back().exit_code == 7);
     bool saw_untrusted_failure = false;
     for (const auto &prompt : backend->prompts)
         for (const auto &[role, content] : prompt)

@@ -6,8 +6,9 @@
   approval for mutations and project-contained import paths.
 - [ ] Plan-first proposal flow with approve/edit/reject behavior.
 - [x] `/review` emits a bounded diff/plan bundle for the latest milestone baseline.
-- [ ] Persist automated check results and decisions in reviews, copy bundles to clipboard, and
-  import review comments as new tasks.
+- [x] Persist latest-task check statuses in private `.platypus` metadata and include them in review
+  bundles (ADR-021).
+- [ ] Capture review decisions, copy bundles to clipboard, and import review comments as new tasks.
 - [x] Detect CMake/Cargo/npm/Go/pytest checks, load `.platypus.toml` argv overrides, require
   approval, return untrusted failures to the model, and cap repair attempts at three (ADR-021).
 - [ ] Optional remote providers with estimate-before-send and fake transport tests.

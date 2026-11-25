@@ -48,6 +48,11 @@ util::Result<std::string> ExecutionEngine::run(const std::string &query, int max
     auto checks = ProjectChecks::discover(tool_registry_->snapshots().root());
     if (!checks.is_ok())
         return Return::fail(checks.error());
+    const auto check_root = tool_registry_->snapshots().root();
+    std::vector<ProjectCheckRecord> check_records;
+    auto cleared_results = ProjectChecks::store_results(check_root, check_records);
+    if (!cleared_results.is_ok())
+        util::Logger::get_instance().warn(cleared_results.error());
     auto syntax = profile ? profile->tool_syntax : "json_tagged";
     auto schemas = nlohmann::json::object();
     auto tools = nlohmann::json::array();
@@ -133,27 +138,44 @@ util::Result<std::string> ExecutionEngine::run(const std::string &query, int max
                 std::size_t passed = 0;
                 for (const auto &check : checks.value()) {
                     auto result = ProjectChecks::run(
-                        check, tool_registry_->snapshots().root(),
+                        check, check_root,
                         [&](const std::string &preview) {
                             return tool_registry_->snapshots().confirm(preview);
                         },
                         stop);
+                    ProjectCheckRecord record{check.name, "error", 0, false};
                     if (!result.is_ok()) {
                         if (stop.stop_requested() || result.error() == "Cancelled")
                             return Return::fail("Cancelled");
                         check_results =
                             "Check '" + check.name + "' could not run: " + result.error();
                     } else if (!result.value().approved) {
+                        record.status = "declined";
+                        check_records.push_back(record);
+                        auto stored = ProjectChecks::store_results(check_root, check_records);
+                        if (!stored.is_ok())
+                            util::Logger::get_instance().warn(stored.error());
                         return Return::ok(text + "\n\nProject checks were not run (approval was "
                                                  "declined).");
                     } else if (result.value().process.exit_code != 0) {
+                        record.status = "failed";
+                        record.exit_code = result.value().process.exit_code;
+                        record.has_exit_code = true;
                         check_results = "Check '" + check.name + "' exited with status " +
                                         std::to_string(result.value().process.exit_code) + ".\n" +
                                         result.value().process.output;
                     } else {
+                        record.status = "passed";
+                        record.exit_code = 0;
+                        record.has_exit_code = true;
                         ++passed;
-                        continue;
                     }
+                    check_records.push_back(record);
+                    auto stored = ProjectChecks::store_results(check_root, check_records);
+                    if (!stored.is_ok())
+                        util::Logger::get_instance().warn(stored.error());
+                    if (record.status == "passed")
+                        continue;
 
                     ++check_attempts;
                     std::string observation =

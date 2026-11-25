@@ -27,5 +27,7 @@ may make up to three check-and-repair attempts per task, then returns the last f
 ## Consequences
 
 Offline tests cover supported manifest detection, overrides, disabled checks, approval and decline,
-direct argv execution, and the three-attempt feedback limit. Check results are not yet persisted for
-review bundles; human acceptance and model effects remain unmeasured.
+direct argv execution, and the three-attempt feedback limit. The latest task's statuses and exit
+codes are stored in private `.platypus/check-results.json` metadata and shown in `/review`. Full
+output and earlier task records are not persisted. Human acceptance and model effects remain
+unmeasured.

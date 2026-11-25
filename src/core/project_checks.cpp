@@ -1,10 +1,15 @@
 // Project checks use direct argv execution and explicit approval, never an implicit shell.
 #include "project_checks.hpp"
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
 #include <fstream>
 #include <iomanip>
 #include <nlohmann/json.hpp>
 #include <sstream>
+#include <sys/stat.h>
 #include <toml++/toml.hpp>
+#include <unistd.h>
 
 namespace platypus::core {
 namespace {
@@ -12,6 +17,8 @@ constexpr std::size_t kMaxCheckCount = 16;
 constexpr std::size_t kMaxArgCount = 32;
 constexpr std::size_t kMaxStringBytes = 4096;
 constexpr std::size_t kMaxConfigBytes = std::size_t{256} * 1024;
+constexpr std::size_t kMaxStoredResults = kMaxCheckCount * 3;
+constexpr std::size_t kMaxResultsBytes = std::size_t{512} * 1024;
 
 bool safe_text(const std::string &value, std::size_t max = kMaxStringBytes) {
     if (value.empty() || value.size() > max)
@@ -212,6 +219,162 @@ util::Result<ProjectCheckResult> ProjectChecks::run(const ProjectCheck &check,
 } catch (const std::exception &error) {
     return util::Result<ProjectCheckResult>::fail("Cannot run project check: " +
                                                   std::string(error.what()));
+}
+
+util::Result<util::Void>
+ProjectChecks::store_results(const std::filesystem::path &project_root,
+                             const std::vector<ProjectCheckRecord> &records) try {
+    using Return = util::Result<util::Void>;
+    if (records.size() > kMaxStoredResults)
+        return Return::fail("Too many project check results");
+    nlohmann::json serialized = nlohmann::json::array();
+    for (const auto &record : records) {
+        if (!safe_text(record.name) || (record.status != "passed" && record.status != "failed" &&
+                                        record.status != "declined" && record.status != "error"))
+            return Return::fail("Invalid project check result");
+        serialized.push_back({{"name", record.name},
+                              {"status", record.status},
+                              {"exit_code", record.has_exit_code ? nlohmann::json(record.exit_code)
+                                                                 : nlohmann::json(nullptr)}});
+    }
+    auto contents = nlohmann::json{{"version", 1}, {"checks", std::move(serialized)}}.dump(2);
+    if (contents.size() > kMaxResultsBytes)
+        return Return::fail("Project check results exceed the storage limit");
+    auto root = std::filesystem::canonical(project_root);
+    auto state = root / ".platypus";
+    std::error_code error;
+    auto state_status = std::filesystem::symlink_status(state, error);
+    if (error == std::errc::no_such_file_or_directory) {
+        error.clear();
+        std::filesystem::create_directory(state, error);
+        if (error)
+            return Return::fail("Cannot create .platypus check storage: " + error.message());
+        std::filesystem::permissions(state, std::filesystem::perms::owner_all,
+                                     std::filesystem::perm_options::replace, error);
+        if (error)
+            return Return::fail("Cannot secure .platypus check storage: " + error.message());
+        state_status = std::filesystem::symlink_status(state, error);
+    }
+    if (error || std::filesystem::is_symlink(state_status) ||
+        !std::filesystem::is_directory(state_status))
+        return Return::fail("Unsafe .platypus check storage");
+    auto destination = state / "check-results.json";
+    auto destination_status = std::filesystem::symlink_status(destination, error);
+    if (!error && (std::filesystem::is_symlink(destination_status) ||
+                   !std::filesystem::is_regular_file(destination_status)))
+        return Return::fail("Unsafe project check result file");
+    if (error != std::errc::no_such_file_or_directory && error)
+        return Return::fail("Cannot inspect project check results: " + error.message());
+
+    auto temporary = (state / ".check-results.tmp.XXXXXX").string();
+    int descriptor = ::mkstemp(temporary.data());
+    if (descriptor < 0)
+        return Return::fail("Cannot create project check result file: " +
+                            std::string(std::strerror(errno)));
+    (void)::fcntl(descriptor, F_SETFD, FD_CLOEXEC);
+    auto cleanup = [&] {
+        (void)::close(descriptor);
+        std::error_code ignored;
+        std::filesystem::remove(temporary, ignored);
+    };
+    if (::fchmod(descriptor, 0600) != 0) {
+        auto message = std::string(std::strerror(errno));
+        cleanup();
+        return Return::fail("Cannot secure check result file: " + message);
+    }
+    std::size_t offset = 0;
+    while (offset < contents.size()) {
+        auto written = ::write(descriptor, contents.data() + offset, contents.size() - offset);
+        if (written < 0 && errno == EINTR)
+            continue;
+        if (written <= 0) {
+            auto message = std::string(std::strerror(errno));
+            cleanup();
+            return Return::fail("Cannot write check result file: " + message);
+        }
+        offset += static_cast<std::size_t>(written);
+    }
+    if (::fsync(descriptor) != 0) {
+        auto message = std::string(std::strerror(errno));
+        cleanup();
+        return Return::fail("Cannot sync check result file: " + message);
+    }
+    if (::close(descriptor) != 0) {
+        descriptor = -1;
+        std::error_code ignored;
+        std::filesystem::remove(temporary, ignored);
+        return Return::fail("Cannot close check result file");
+    }
+    descriptor = -1;
+    std::filesystem::rename(temporary, destination, error);
+    if (error) {
+        auto message = error.message();
+        std::error_code ignored;
+        std::filesystem::remove(temporary, ignored);
+        return Return::fail("Cannot replace check result file: " + message);
+    }
+    return Return::ok();
+} catch (const std::exception &error) {
+    return util::Result<util::Void>::fail("Cannot store project check results: " +
+                                          std::string(error.what()));
+}
+
+util::Result<std::vector<ProjectCheckRecord>>
+ProjectChecks::load_results(const std::filesystem::path &project_root) try {
+    using Return = util::Result<std::vector<ProjectCheckRecord>>;
+    auto root = std::filesystem::canonical(project_root);
+    auto state = root / ".platypus";
+    std::error_code error;
+    auto state_status = std::filesystem::symlink_status(state, error);
+    if (error == std::errc::no_such_file_or_directory)
+        return Return::ok({});
+    if (error || std::filesystem::is_symlink(state_status) ||
+        !std::filesystem::is_directory(state_status))
+        return Return::fail("Unsafe .platypus check storage");
+    auto path = state / "check-results.json";
+    auto status = std::filesystem::symlink_status(path, error);
+    if (error == std::errc::no_such_file_or_directory)
+        return Return::ok({});
+    if (error || std::filesystem::is_symlink(status) || !std::filesystem::is_regular_file(status))
+        return Return::fail("Unsafe project check result file");
+    auto size = std::filesystem::file_size(path, error);
+    if (error || size > kMaxResultsBytes)
+        return Return::fail("Project check result file exceeds the storage limit");
+    std::ifstream input(path, std::ios::binary);
+    if (!input)
+        return Return::fail("Cannot read project check results");
+    std::string contents(static_cast<std::size_t>(size), '\0');
+    input.read(contents.data(), static_cast<std::streamsize>(contents.size()));
+    if (input.gcount() != static_cast<std::streamsize>(contents.size()))
+        return Return::fail("Project check results changed while being read");
+    auto document = nlohmann::json::parse(contents);
+    if (!document.is_object() || document.value("version", 0) != 1 ||
+        !document.contains("checks") || !document["checks"].is_array() ||
+        document["checks"].size() > kMaxStoredResults)
+        return Return::fail("Invalid project check result metadata");
+    std::vector<ProjectCheckRecord> records;
+    for (const auto &item : document["checks"]) {
+        if (!item.is_object() || !item.contains("name") || !item["name"].is_string() ||
+            !item.contains("status") || !item["status"].is_string() || !item.contains("exit_code"))
+            return Return::fail("Invalid project check result record");
+        auto name = item["name"].get<std::string>();
+        auto state_text = item["status"].get<std::string>();
+        if (!safe_text(name) || (state_text != "passed" && state_text != "failed" &&
+                                 state_text != "declined" && state_text != "error"))
+            return Return::fail("Invalid project check result fields");
+        ProjectCheckRecord record{std::move(name), std::move(state_text), 0, false};
+        if (!item["exit_code"].is_null()) {
+            if (!item["exit_code"].is_number_integer())
+                return Return::fail("Invalid project check exit status");
+            record.exit_code = item["exit_code"].get<int>();
+            record.has_exit_code = true;
+        }
+        records.push_back(std::move(record));
+    }
+    return Return::ok(std::move(records));
+} catch (const std::exception &error) {
+    return util::Result<std::vector<ProjectCheckRecord>>::fail(
+        "Cannot load project check results: " + std::string(error.what()));
 }
 
 } // namespace platypus::core
