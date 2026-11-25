@@ -22,9 +22,9 @@
   exits fail without retry. Unit and CLI end-to-end fake-child tests cover these paths. Guaranteed
   shutdown is implemented with fake process and health probes. `run
   --managed-model` integrates process start/readiness/shutdown into CLI runs. A source build script
-  now builds and installs the ADR-002-pinned CPU server, with opt-in CUDA/Vulkan configuration; its
-  Linux CPU binary was built and version-checked locally. Runtime inference OOM errors, GPU server
-  builds, and hosted CI remain unverified.
+  now builds the ADR-002-pinned server with automatic Metal/CUDA/Vulkan/CPU selection and explicit
+  backend overrides (ADR-032); its Linux CPU binary was built and version-checked locally. Runtime
+  inference OOM errors, GPU server builds, and hosted CI remain unverified.
 - [ ] Add setup wizard, Linux installer, Homebrew formula, update command, and distribution docs.
   In progress: `platypus models list`, `recommend`, and `download` use the validated catalog,
   detected host facts, and verified downloader; source-tree and install catalog lookup are wired.
@@ -32,7 +32,9 @@
   guide documents CPU/CUDA/Vulkan choices. `platypus setup` now
   recommends, downloads and verifies the selected model, loads its profile, and enters a managed
   interactive session. Its full download/server path still needs a real-model installation test.
-  Homebrew formula, release updater, and assisted-free acceptance remain.
+  The pinned-server build selects Metal, CUDA, Vulkan, or CPU from the build host by default;
+  explicit backend overrides remain available. Homebrew formula, release updater, and assisted-free
+  acceptance remain.
 - [ ] Extend CI for the supported Linux/macOS release targets and supported backend builds.
   Existing Linux GCC/Clang/sanitizer and macOS arm64 jobs now provision OpenSSL Crypto; an optional
   Linux Vulkan job builds the pinned server with Vulkan; CUDA 12.9.1 and CUDA 13.0.0 container jobs

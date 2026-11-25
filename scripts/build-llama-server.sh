@@ -7,8 +7,37 @@ build_root="${PLATYPUS_BUILD_DIR:-${source_root}/build/install}"
 prefix="${PLATYPUS_INSTALL_PREFIX:-${HOME}/.local}"
 llama_source="${build_root}/_deps/llama.cpp"
 llama_build="${build_root}/llama-server"
-backend="${PLATYPUS_LLAMA_BACKEND:-cpu}"
+backend="${PLATYPUS_LLAMA_BACKEND:-auto}"
 build_jobs="${PLATYPUS_BUILD_JOBS:-2}"
+backend_reason="explicit PLATYPUS_LLAMA_BACKEND setting"
+
+if [[ "${backend}" == auto ]]; then
+  case "$(uname -s)" in
+    Darwin)
+      backend=metal
+      backend_reason="native Apple Metal support"
+      ;;
+    Linux)
+      if command -v nvcc >/dev/null 2>&1 && command -v nvidia-smi >/dev/null 2>&1 &&
+        nvidia-smi -L >/dev/null 2>&1; then
+        backend=cuda
+        backend_reason="CUDA toolkit and an available NVIDIA GPU"
+      elif command -v pkg-config >/dev/null 2>&1 && pkg-config --exists vulkan &&
+        command -v glslc >/dev/null 2>&1 && compgen -G '/dev/dri/renderD*' >/dev/null; then
+        backend=vulkan
+        backend_reason="Vulkan development tools and a Linux render device"
+      else
+        backend=cpu
+        backend_reason="no usable CUDA or Vulkan build environment was detected"
+      fi
+      ;;
+    *)
+      backend=cpu
+      backend_reason="no GPU backend auto-detection for this operating system"
+      ;;
+  esac
+  echo "Automatically selected llama-server backend: ${backend} (${backend_reason})." >&2
+fi
 
 for command in cmake git ninja; do
   if ! command -v "${command}" >/dev/null 2>&1; then
@@ -21,7 +50,14 @@ case "${backend}" in
   cpu) backend_args=() ;;
   cuda) backend_args=(-DGGML_CUDA=ON -DGGML_NATIVE=OFF) ;;
   vulkan) backend_args=(-DGGML_VULKAN=ON) ;;
-  *) echo "PLATYPUS_LLAMA_BACKEND must be cpu, cuda, or vulkan." >&2; exit 2 ;;
+  metal)
+    if [[ "$(uname -s)" != Darwin ]]; then
+      echo "The Metal llama-server backend is available only on macOS." >&2
+      exit 2
+    fi
+    backend_args=(-DGGML_METAL=ON)
+    ;;
+  *) echo "PLATYPUS_LLAMA_BACKEND must be auto, cpu, cuda, vulkan, or metal." >&2; exit 2 ;;
 esac
 if [[ ! "${build_jobs}" =~ ^[1-9][0-9]*$ ]]; then
   echo "PLATYPUS_BUILD_JOBS must be a positive integer." >&2

@@ -11,10 +11,11 @@ Install CMake 3.24+, Ninja, a C++20 compiler, libcurl, OpenSSL Crypto, SQLite de
 Git, Python 3.11+, and ripgrep before running it. Override the install path with
 `PLATYPUS_INSTALL_PREFIX` or the build directory with `PLATYPUS_BUILD_DIR`. The script builds the
 Platypus client, installs the checked-in catalog and profiles, then builds the pinned llama-server
-at the exact revision in ADR-002. The default backend is CPU. Set
-`PLATYPUS_LLAMA_BACKEND=cuda` with a CUDA toolkit or `PLATYPUS_LLAMA_BACKEND=vulkan` with Vulkan
-development files before running the installer. These builds require network access to fetch the
-pinned llama.cpp source. `PLATYPUS_BUILD_JOBS` controls server build parallelism (default `2`).
+at the exact revision in ADR-002. The server build automatically selects Metal on macOS, CUDA when
+the CUDA toolkit and an NVIDIA GPU are available, Vulkan when its development tools and a Linux
+render device are available, and CPU otherwise. Set `PLATYPUS_LLAMA_BACKEND=cpu`, `cuda`, or
+`vulkan` to override the Linux choice. These builds require network access to fetch the pinned
+llama.cpp source. `PLATYPUS_BUILD_JOBS` controls server build parallelism (default `2`).
 The installer does not download model files.
 
 After install, add `~/.local/bin` to `PATH`, then inspect available models and hardware-aware
