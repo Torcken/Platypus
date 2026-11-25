@@ -87,6 +87,7 @@ target_include_directories(tree_sitter_grammars PRIVATE
 target_link_libraries(tree_sitter_grammars PUBLIC tree-sitter)
 find_package(CURL REQUIRED)
 find_package(SQLite3 REQUIRED)
+find_package(Vulkan QUIET)
 option(PLATYPUS_ASAN "Enable AddressSanitizer" OFF)
 option(PLATYPUS_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 add_library(platypus_options INTERFACE)

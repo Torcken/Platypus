@@ -11,6 +11,7 @@
 #include "llm/remote_provider.hpp"
 #include "llm/tool_grammar.hpp"
 #include "platform/clipboard.hpp"
+#include "platform/hardware.hpp"
 #include "platform/model_catalog.hpp"
 #include "platform/process.hpp"
 #include <catch2/catch_test_macros.hpp>
@@ -220,6 +221,21 @@ TEST_CASE("Model catalog validates pinned artifacts and ranks hardware-compatibl
     moving_reference["models"][0]["url"] =
         "https://huggingface.co/test/model/resolve/main/model.gguf";
     REQUIRE_FALSE(platform::parse_model_catalog(moving_reference.dump()).is_ok());
+}
+TEST_CASE("Hardware detection remains usable without a GPU driver") {
+    auto inventory = platform::detect_hardware([] { return std::vector<platform::GpuInfo>{}; });
+    REQUIRE(inventory.is_ok());
+    REQUIRE(inventory.value().system_memory_bytes > 0);
+    REQUIRE_FALSE(inventory.value().cpu_architecture.empty());
+    REQUIRE_FALSE(inventory.value().primary_gpu.has_value());
+    REQUIRE(inventory.value().catalog_facts().gpu_memory_bytes == 0);
+
+    const std::vector<platform::GpuInfo> devices{{"Small GPU", "AMD", 6, "fixture"},
+                                                 {"Large GPU", "NVIDIA", 12, "fixture"},
+                                                 {"Shared GPU", "Intel", 12, "fixture"}};
+    auto selected = platform::select_primary_gpu(devices);
+    REQUIRE(selected.has_value());
+    REQUIRE(selected->name == "Large GPU");
 }
 TEST_CASE("Engine uses approved remote calls for proposals and reviews only") {
     Workspace workspace;
