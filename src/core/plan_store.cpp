@@ -308,6 +308,41 @@ util::Result<std::string> PlanStore::add_task(std::size_t milestone_index,
     return util::Result<std::string>::fail("Cannot add task: " + std::string(error.what()));
 }
 
+util::Result<std::vector<std::string>>
+PlanStore::add_tasks(std::size_t milestone_index,
+                     const std::vector<std::string> &descriptions) const try {
+    using Return = util::Result<std::vector<std::string>>;
+    if (descriptions.empty() || descriptions.size() > 12)
+        return Return::fail("Task batch must contain between 1 and 12 tasks");
+    for (const auto &description : descriptions)
+        if (!valid_text(description))
+            return Return::fail("Task description must contain 1 to 500 single-line characters");
+    auto loaded = load();
+    if (!loaded.is_ok())
+        return Return::fail(loaded.error());
+    auto updated = loaded.value();
+    if (milestone_index >= updated.size())
+        return Return::fail("Milestone index is outside the plan");
+    auto next = next_task_number(updated);
+    if (!next.is_ok())
+        return Return::fail(next.error());
+    auto next_number = next.value();
+    std::vector<std::string> ids;
+    ids.reserve(descriptions.size());
+    for (const auto &description : descriptions) {
+        auto id = task_id(next_number++);
+        updated[milestone_index].tasks.push_back({id, description, false});
+        ids.push_back(std::move(id));
+    }
+    auto saved = save(updated);
+    if (!saved.is_ok())
+        return Return::fail(saved.error());
+    return Return::ok(std::move(ids));
+} catch (const std::exception &error) {
+    return util::Result<std::vector<std::string>>::fail("Cannot add task batch: " +
+                                                        std::string(error.what()));
+}
+
 util::Result<util::Void> PlanStore::set_task_complete(const std::string &task_id,
                                                       bool complete) const try {
     using Return = util::Result<util::Void>;

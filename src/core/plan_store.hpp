@@ -35,6 +35,9 @@ class PlanStore {
     util::Result<util::Void> set_milestone_baseline(std::size_t milestone_index,
                                                     const std::string &snapshot_id) const;
     util::Result<std::string> add_task(std::size_t milestone_index, std::string description) const;
+    /// Add a batch of unchecked tasks atomically, assigning sequential IDs.
+    util::Result<std::vector<std::string>>
+    add_tasks(std::size_t milestone_index, const std::vector<std::string> &descriptions) const;
     util::Result<util::Void> set_task_complete(const std::string &task_id, bool complete) const;
     /// Append an imported plan, assigning fresh task IDs before writing it.
     util::Result<util::Void> merge_import(std::string_view markdown) const;

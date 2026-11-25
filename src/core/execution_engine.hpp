@@ -8,8 +8,10 @@
 #include "agent/context_manager.hpp"
 #include "session/store.hpp"
 #include "tool.hpp"
+#include <functional>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <stop_token>
 #include <string>
 #include <vector>
@@ -37,6 +39,8 @@ struct Action {
  */
 class ExecutionEngine {
   public:
+    using PlanApprover =
+        std::function<std::optional<std::vector<std::string>>(const std::vector<std::string> &)>;
     /**
      * @brief Constructs the ExecutionEngine.
      * @param backend The LLM backend to use.
@@ -59,6 +63,11 @@ class ExecutionEngine {
     /// Ask the configured backend for a bounded, structured task proposal without running tools.
     util::Result<std::vector<std::string>> propose_plan(const std::string &query,
                                                         std::stop_token stop = {});
+
+    /// Propose, approve or edit, persist, then execute plan steps sequentially.
+    util::Result<std::string> run_planned(const std::string &query, const PlanApprover &approve,
+                                          int max_steps = 25, bool headless = false,
+                                          std::stop_token stop = {});
 
     /// Attach a session log; history is loaded without appending duplicate records.
     util::Result<bool> attach_session(std::shared_ptr<session::Store> store, const std::string &id);

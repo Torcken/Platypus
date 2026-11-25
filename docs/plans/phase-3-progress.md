@@ -4,9 +4,9 @@
   merge API with duplicate-ID remapping.
 - [x] Interactive `/plan`, `/milestone`, `/task`, `/done`, and `/import` commands with explicit
   approval for mutations and project-contained import paths.
-- [ ] Plan-first proposal flow with approve/edit/reject behavior.
-- Proposal generation now has a bounded structured-output API and FakeBackend regression coverage;
-  CLI/TUI approval, editing, persistence, and execution wiring remain.
+- [x] Plan-first proposal flow is the CLI/TUI default, with approve/edit/reject decisions, persisted
+  task steps, sequential execution, and completion updates; `--direct` and `/direct` preserve an
+  explicit direct-request path.
 - [x] `/review` emits a bounded diff/plan bundle for the latest milestone baseline.
 - [x] Persist latest-task check statuses in private `.platypus` metadata and include them in review
   bundles (ADR-021).
@@ -14,10 +14,11 @@
 - [x] Detect CMake/Cargo/npm/Go/pytest checks, load `.platypus.toml` argv overrides, require
   approval, return untrusted failures to the model, and cap repair attempts at three (ADR-021).
 - [ ] Optional remote providers with estimate-before-send and fake transport tests.
-- [ ] FakeBackend integration test for the full workflow cycle.
+- [ ] One FakeBackend integration test for the complete plan → execute → check → review → comment
+  import cycle. Separate tests currently cover proposal, decisions, execution, checks, and storage.
 - [x] Dev, ASan, and UBSan suites (9/9 each), benchmark tests (41/41), and formatter checks pass.
-  Focused clang-tidy is not clean: it reports existing logger, registry, and `SnapshotStore`
-  warnings plus a stop-token-by-value convention warning in the new check API.
+  Focused clang-tidy is not clean: it reports logger enum/stream, registry vector-growth,
+  `SnapshotStore`/backend/engine stop-token, and TUI event-parameter suggestions.
 
 Plan storage and basic interactive management are locally implemented. Plan-first execution,
 checks, review bundles, provider integration and the Phase 3 exit cycle remain incomplete. Track

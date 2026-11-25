@@ -15,7 +15,7 @@ void interrupt(int) { interrupted = 1; }
 int main(int argc, char *argv[]) {
     using namespace platypus;
     try {
-        bool headless = false, yes = false, undo = false, resume = false;
+        bool headless = false, yes = false, undo = false, resume = false, direct = false;
         std::string resume_id;
         int steps = 25;
         std::string profile_path;
@@ -30,7 +30,8 @@ int main(int argc, char *argv[]) {
             };
             if (argument == "--help" || argument == "-h") {
                 std::cout
-                    << "Platypus 0.1.0\nUsage: platypus run [--headless] [--yes] [--project DIR] "
+                    << "Platypus 0.1.0\nUsage: platypus run [--headless] [--yes] [--direct] "
+                       "[--project DIR] "
                        "[--endpoint URL] [--max-steps N] instruction\n"
                        "       platypus undo [--yes] [--project DIR]\nWithout an instruction, "
                        "starts an interactive session. /undo restores the latest snapshot.\n";
@@ -50,6 +51,8 @@ int main(int argc, char *argv[]) {
                 headless = true;
             else if (argument == "--yes")
                 yes = true;
+            else if (argument == "--direct")
+                direct = true;
             else if (argument == "--project")
                 root = next();
             else if (argument == "--endpoint")
@@ -131,7 +134,7 @@ int main(int argc, char *argv[]) {
         std::cerr << "Session " << session_id << '\n';
         if (!headless && task.empty() && isatty(STDIN_FILENO) && isatty(STDOUT_FILENO))
             return tui::run_terminal(engine, *tools, profile_path.empty() ? endpoint : profile_path,
-                                     steps, yes);
+                                     steps, yes, direct);
         std::signal(SIGINT, interrupt);
         std::stop_source source;
         // C++ note: jthread joins before source is destroyed; no detached callbacks can outlive it.
@@ -145,7 +148,37 @@ int main(int argc, char *argv[]) {
             }
         });
         auto execute = [&](const std::string &query) {
-            auto result = engine.run(query, steps, headless, source.get_token());
+            const bool use_direct = direct || query.starts_with("/direct ");
+            const auto instruction = query.starts_with("/direct ") ? query.substr(8) : query;
+            if (instruction.empty()) {
+                std::cerr << "Usage: /direct <instruction>\n";
+                return 2;
+            }
+            auto approve_plan = [&](const std::vector<std::string> &proposal)
+                -> std::optional<std::vector<std::string>> {
+                std::cerr << "Proposed plan:\n";
+                for (std::size_t i = 0; i < proposal.size(); ++i)
+                    std::cerr << "  " << i + 1 << ". " << proposal[i] << '\n';
+                if (yes) {
+                    std::cerr << "Approved (--yes)\n";
+                    return proposal;
+                }
+                if (headless)
+                    return std::nullopt;
+                while (true) {
+                    std::cerr << "Plan decision [y approve, n reject, e: step | step edit]: ";
+                    std::string decision;
+                    if (!std::getline(std::cin, decision))
+                        return std::nullopt;
+                    auto parsed = core::parse_plan_decision(decision, proposal);
+                    if (parsed.is_ok())
+                        return parsed.value();
+                    std::cerr << parsed.error() << '\n';
+                }
+            };
+            auto result = use_direct ? engine.run(instruction, steps, headless, source.get_token())
+                                     : engine.run_planned(instruction, approve_plan, steps,
+                                                          headless, source.get_token());
             if (!result.is_ok()) {
                 std::cerr << result.error() << '\n';
                 return 1;
@@ -157,7 +190,8 @@ int main(int argc, char *argv[]) {
             return execute(task);
         if (headless)
             throw std::runtime_error("Headless mode requires an instruction");
-        std::cout << "Platypus — /plan, /milestone, /task, /done, /import, /undo, /quit\n";
+        std::cout << "Platypus — plan-first tasks; /direct <instruction> skips planning. "
+                     "/plan, /milestone, /task, /done, /import, /undo, /quit\n";
         while (!source.stop_requested()) {
             std::cout << "> " << std::flush;
             if (!std::getline(std::cin, task) || task == "/quit")

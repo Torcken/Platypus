@@ -142,4 +142,40 @@ std::optional<std::string> handle_plan_command(const std::string &input,
     return std::nullopt;
 }
 
+util::Result<std::optional<std::vector<std::string>>>
+parse_plan_decision(const std::string &input, const std::vector<std::string> &proposal) {
+    using Return = util::Result<std::optional<std::vector<std::string>>>;
+    auto trim = [](const std::string &value) {
+        auto first = value.find_first_not_of(" \t");
+        if (first == std::string::npos)
+            return std::string{};
+        auto last = value.find_last_not_of(" \t");
+        return value.substr(first, last - first + 1);
+    };
+    auto decision = trim(input);
+    if (decision == "y" || decision == "yes")
+        return Return::ok(proposal);
+    if (decision == "n" || decision == "no")
+        return Return::ok(std::nullopt);
+    if (!decision.starts_with("e:"))
+        return Return::fail("Enter y to approve, n to reject, or e: step | step to edit");
+    std::vector<std::string> edited;
+    std::string_view remaining(decision);
+    remaining.remove_prefix(2);
+    while (true) {
+        auto separator = remaining.find('|');
+        auto step = trim(std::string(remaining.substr(0, separator)));
+        if (step.empty() || step.size() > 240 || step.find_first_of("\r\n") != std::string::npos ||
+            step.find('\0') != std::string::npos)
+            return Return::fail("Edited steps must be non-empty and at most 240 characters");
+        edited.push_back(std::move(step));
+        if (edited.size() > 12)
+            return Return::fail("An approved plan can contain at most 12 steps");
+        if (separator == std::string_view::npos)
+            break;
+        remaining.remove_prefix(separator + 1);
+    }
+    return Return::ok(std::move(edited));
+}
+
 } // namespace platypus::core

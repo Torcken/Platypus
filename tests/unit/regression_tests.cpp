@@ -71,6 +71,51 @@ TEST_CASE("Plan proposals are bounded structured output and do not execute tools
     REQUIRE_FALSE(engine.propose_plan("invalid-proposal").is_ok());
     REQUIRE_FALSE(fs::exists(workspace.root / "PLAN.md"));
 }
+TEST_CASE("Approved plans persist, execute sequentially, and complete successful tasks") {
+    Workspace workspace;
+    std::ofstream(workspace.root / ".platypus.toml") << R"toml([checks]
+commands = [{name="step counter", argv=["python3", "-c", "open('check-count','a').write('x')"]}]
+)toml";
+    auto backend = std::make_shared<llm::FakeBackend>();
+    backend->set_script("planned-cycle", {R"({"steps":["Inspect the implementation"]})",
+                                          "First step complete", "Second step complete"});
+    std::size_t approvals = 0;
+    auto registry = std::make_shared<core::ToolRegistry>(workspace.root, [&](const auto &) {
+        ++approvals;
+        return true;
+    });
+    core::register_default_tools(*registry);
+    core::ExecutionEngine engine(backend, registry);
+    auto result = engine.run_planned(
+        "planned-cycle", [](const auto &) -> std::optional<std::vector<std::string>> {
+            return std::vector<std::string>{"Review the implementation", "Add focused tests"};
+        });
+    REQUIRE(result.is_ok());
+    REQUIRE(result.value().find("Review the implementation") != std::string::npos);
+    REQUIRE(result.value().find("Add focused tests") != std::string::npos);
+    REQUIRE(approvals == 2);
+    REQUIRE(read(workspace.root / "check-count") == "xx");
+    core::PlanStore plan(workspace.root);
+    auto loaded = plan.load();
+    REQUIRE(loaded.is_ok());
+    REQUIRE(loaded.value().size() == 1);
+    REQUIRE(loaded.value()[0].tasks.size() == 2);
+    REQUIRE(loaded.value()[0].tasks[0].description == "Review the implementation");
+    REQUIRE(loaded.value()[0].tasks[0].complete);
+    REQUIRE(loaded.value()[0].tasks[1].complete);
+}
+TEST_CASE("Rejected plan proposals leave the project plan untouched") {
+    Workspace workspace;
+    auto backend = std::make_shared<llm::FakeBackend>();
+    backend->set_script("reject-cycle", {R"({"steps":["Do not run"]})"});
+    auto registry = std::make_shared<core::ToolRegistry>(workspace.root);
+    core::ExecutionEngine engine(backend, registry);
+    auto result = engine.run_planned(
+        "reject-cycle",
+        [](const auto &) -> std::optional<std::vector<std::string>> { return std::nullopt; });
+    REQUIRE_FALSE(result.is_ok());
+    REQUIRE_FALSE(fs::exists(workspace.root / "PLAN.md"));
+}
 TEST_CASE("Unapproved tools cannot mutate files or run commands") {
     Workspace workspace;
     core::ToolRegistry tools(workspace.root);
@@ -114,6 +159,19 @@ TEST_CASE("Plan parser rejects malformed and duplicate tasks") {
                                          "bad\nsecond line\n")
                       .is_ok());
 }
+TEST_CASE("Plan decision parser supports approval, rejection, and edited steps") {
+    const std::vector<std::string> proposal{"Original step"};
+    auto accepted = core::parse_plan_decision(" y ", proposal);
+    REQUIRE(accepted.is_ok());
+    REQUIRE(accepted.value() == proposal);
+    auto rejected = core::parse_plan_decision("n", proposal);
+    REQUIRE(rejected.is_ok());
+    REQUIRE_FALSE(rejected.value().has_value());
+    auto edited = core::parse_plan_decision("e: Inspect sources | Add tests", proposal);
+    REQUIRE(edited.is_ok());
+    REQUIRE(edited.value().value() == std::vector<std::string>{"Inspect sources", "Add tests"});
+    REQUIRE_FALSE(core::parse_plan_decision("e: | broken", proposal).is_ok());
+}
 TEST_CASE("Imported plans merge as new unchecked tasks with fresh IDs") {
     Workspace workspace;
     core::PlanStore plans(workspace.root);
@@ -142,6 +200,13 @@ TEST_CASE("Plan store creates milestones and tasks through validated updates") {
     REQUIRE(loaded.value()[0].tasks[0].complete);
     REQUIRE_FALSE(plans.add_task(1, "Invalid milestone").is_ok());
     REQUIRE_FALSE(plans.add_task(0, "two lines\nare rejected").is_ok());
+    auto batch = plans.add_tasks(0, {"First proposal step", "Second proposal step"});
+    REQUIRE(batch.is_ok());
+    REQUIRE(batch.value() == std::vector<std::string>{"TASK-0002", "TASK-0003"});
+    auto before_invalid_batch = plans.load();
+    REQUIRE_FALSE(plans.add_tasks(0, {"Valid", "invalid\nstep"}).is_ok());
+    REQUIRE(plans.load().value().size() == before_invalid_batch.value().size());
+    REQUIRE(plans.load().value()[0].tasks.size() == before_invalid_batch.value()[0].tasks.size());
 }
 TEST_CASE("Plan file import previews and requires explicit approval") {
     Workspace workspace, outside;

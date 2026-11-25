@@ -13,7 +13,9 @@ from bench.proxy import ProxyServer
 binary = str(Path(sys.argv[1]).resolve())
 with tempfile.TemporaryDirectory(prefix="platypus-cli-") as temporary:
     root = Path(temporary)
-    calls = ['{"tool_call":{"name":"write","arguments":{"path":"result.txt","content":"verified"}}}', "Done"]
+    calls = ['{"steps":["Write the requested file"]}',
+             '{"tool_call":{"name":"write","arguments":{"path":"result.txt","content":"verified"}}}',
+             "Done"]
     with fake_server(responses=calls) as endpoint:
         result = subprocess.run([binary, "run", "--headless", "--yes", "--project", temporary,
                                  "--endpoint", endpoint, "Write a file"], capture_output=True, text=True, timeout=10)
@@ -28,13 +30,33 @@ with tempfile.TemporaryDirectory(prefix="platypus-cli-") as temporary:
                                  "--endpoint", endpoint, "Write a file"], capture_output=True, text=True, timeout=10)
     assert denied.returncode != 0
     assert not (root / "result.txt").exists()
-    with fake_server(responses=["Resumed"]) as endpoint:
-        resumed = subprocess.run([binary, "--resume", "1", "--headless", "--project", temporary,
+    with fake_server(responses=['{"steps":["Continue the session"]}', "Resumed"]) as endpoint:
+        resumed = subprocess.run([binary, "--resume", "1", "--headless", "--yes", "--project", temporary,
                                   "--endpoint", endpoint, "Continue"], capture_output=True, text=True, timeout=10)
     assert resumed.returncode == 0, resumed.stderr
     assert "Resumed" in resumed.stdout
     assert (root / ".platypus/sessions.db").is_file()
-print("CLI write/approval/undo/resume integration passed")
+with tempfile.TemporaryDirectory(prefix="platypus-direct-") as temporary:
+    with fake_server(responses=[
+        '{"tool_call":{"name":"write","arguments":{"path":"direct.txt","content":"ok"}}}',
+        "Done",
+    ]) as endpoint:
+        direct = subprocess.run([binary, "run", "--headless", "--yes", "--direct", "--project",
+                                 temporary, "--endpoint", endpoint, "Write directly"],
+                                capture_output=True, text=True, timeout=10)
+    assert direct.returncode == 0, direct.stderr
+    assert (Path(temporary) / "direct.txt").read_text() == "ok"
+    assert not (Path(temporary) / "PLAN.md").exists()
+with tempfile.TemporaryDirectory(prefix="platypus-plan-edit-") as temporary:
+    with fake_server(responses=['{"steps":["Model proposal"]}', "First step done", "Second step done"]) as endpoint:
+        edited = subprocess.run([binary, "run", "--project", temporary, "--endpoint", endpoint,
+                                 "Implement a feature"], input="e: Edit step one | Edit step two\n",
+                                capture_output=True, text=True, timeout=15)
+    assert edited.returncode == 0, edited.stderr
+    plan = (Path(temporary) / "PLAN.md").read_text()
+    assert "[x] TASK-0001: Edit step one" in plan
+    assert "[x] TASK-0002: Edit step two" in plan
+print("CLI plan approval/edit, direct request, write/undo/resume integration passed")
 
 # Native profile sessions exercise rendering through the actual HTTP transport and CLI.
 for syntax, prefix, suffix, role, call, response_marker in (
@@ -51,16 +73,16 @@ for syntax, prefix, suffix, role, call, response_marker in (
                            '\nturn_suffix=' + json.dumps(suffix) +
                            '\nassistant_role=' + json.dumps(role) + '\n')
         captured = []
-        with fake_server(responses=[call, "Done"], captured=captured) as endpoint:
+        with fake_server(responses=['{"steps":["Write a native file"]}', call, "Done"], captured=captured) as endpoint:
             result = subprocess.run([binary, "run", "--headless", "--yes", "--project", temporary,
                                      "--endpoint", endpoint, "--profile", str(profile), "Write a file"],
                                     capture_output=True, text=True, timeout=10)
         assert result.returncode == 0, result.stderr
         assert (root / "native.txt").read_text() == "verified"
         completions = [item["body"] for item in captured if item["endpoint"] == "/completion"]
-        assert len(completions) == 2
-        assert completions[1]["prompt"].startswith(completions[0]["prompt"] + call)
-        assert response_marker in completions[1]["prompt"]
+        assert len(completions) == 3
+        assert completions[2]["prompt"].startswith(completions[1]["prompt"] + call)
+        assert response_marker in completions[2]["prompt"]
         tokenizations = [item["body"] for item in captured if item["endpoint"] == "/tokenize"]
         assert len(tokenizations) == len(completions)
         for tokenization, completion in zip(tokenizations, completions):
@@ -105,7 +127,8 @@ for syntax in ("json_tagged", "qwen_xml", "gemma"):
                                '\n[template]\nturn_prefix=' + json.dumps(prefix) +
                                '\nturn_suffix=' + json.dumps(suffix) + '\n')
             command += ["--profile", str(profile)]
-        responses = [encode_call(syntax, "write", {"path": "result.txt", "content": "before"}),
+        responses = ['{"steps":["Edit the requested file"]}',
+                     encode_call(syntax, "write", {"path": "result.txt", "content": "before"}),
                      encode_call(syntax, "edit", {"path": "result.txt", "old_string": "missing", "new_string": "after"}),
                      encode_call(syntax, "edit", {"path": "result.txt", "old_string": "before", "new_string": "after"}), "Done"]
         captured = []
@@ -122,11 +145,11 @@ for syntax in ("json_tagged", "qwen_xml", "gemma"):
         assert (workspace / "result.txt").read_text() == "after"
         records = [json.loads(line) for line in proxy.recording.read_text().splitlines()]
         metrics = compute_metrics(records, {"write", "edit"}, "error")
-        assert metrics["turns"] == 4, metrics
+        assert metrics["turns"] == 5, metrics
         assert metrics["invalid_tool_calls"] == 0, metrics
         assert metrics["failed_edits"] == 1, metrics
         assert metrics["loops"] == 0, metrics
-        assert metrics["prompt_tokens_total"] == 60, metrics
+        assert metrics["prompt_tokens_total"] == 75, metrics
         assert not metrics["tool_metrics_errors"], metrics
         assert all("X-Platypus-Benchmark" not in item["headers"] for item in captured)
         assert all("client_metadata" in record for record in records

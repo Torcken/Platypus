@@ -15,18 +15,20 @@
 #include <utility>
 namespace platypus::tui {
 int run_terminal(core::ExecutionEngine &engine, core::ToolRegistry &tools, const std::string &model,
-                 int steps, bool auto_approve) {
+                 int steps, bool auto_approve, bool direct_mode) {
     using namespace ftxui;
     auto screen = ScreenInteractive::Fullscreen();
     std::mutex mutex;
     std::condition_variable_any answered;
-    std::string history =
-        "Platypus — enter a task, /plan, /milestone, /task, /done, /import, /undo, or /quit\n";
+    std::condition_variable_any plan_answered;
+    std::string history = "Platypus — plan-first tasks; /direct <instruction> skips planning. "
+                          "/plan, /milestone, /task, /done, /import, /undo, or /quit\n";
     std::string input;
     std::string context_status = "Context: waiting for first request";
-    bool busy = false, approving = false;
+    bool busy = false, approving = false, planning = false;
     int scroll = 0;
     std::optional<bool> decision;
+    std::optional<std::string> plan_decision;
     std::stop_source task_stop;
     std::jthread worker;
     auto append = [&](const std::string &text) {
@@ -82,7 +84,9 @@ int run_terminal(core::ExecutionEngine &engine, core::ToolRegistry &tools, const
                      text(context_status) | dim, separator(),
                      vbox(elements) | vscroll_indicator | frame | flex, separator(),
                      approving ? text("Approve this action? Y = approve, N = deny") | bold
-                               : editor->Render(),
+                     : planning
+                         ? hbox({text("Plan [y / n / e: step | step]: ") | bold, editor->Render()})
+                         : editor->Render(),
                      text("Enter: send  Esc: cancel/exit  PgUp/PgDn: history  /undo: restore") |
                          dim}) |
                border;
@@ -99,6 +103,11 @@ int run_terminal(core::ExecutionEngine &engine, core::ToolRegistry &tools, const
                               event == Event::Character('n') || event == Event::Character('N'))) {
                 decision = event == Event::Character('y') || event == Event::Character('Y');
                 answered.notify_all();
+                return true;
+            }
+            if (planning && event == Event::Return) {
+                plan_decision = std::exchange(input, "");
+                plan_answered.notify_all();
                 return true;
             }
             if (event == Event::Escape || event == Event::CtrlC) {
@@ -128,6 +137,50 @@ int run_terminal(core::ExecutionEngine &engine, core::ToolRegistry &tools, const
         }
         append("\n> " + query + "\n");
         worker = std::jthread([&, query](std::stop_token) {
+            auto approve_plan = [&](const std::vector<std::string> &proposal)
+                -> std::optional<std::vector<std::string>> {
+                {
+                    std::lock_guard lock(mutex);
+                    history += "Proposed plan:\n";
+                    for (std::size_t i = 0; i < proposal.size(); ++i)
+                        history += "  " + std::to_string(i + 1) + ". " + proposal[i] + "\n";
+                    if (auto_approve) {
+                        history += "Approved (--yes)\n";
+                        screen.PostEvent(Event::Custom);
+                        return proposal;
+                    }
+                    planning = true;
+                    plan_decision.reset();
+                }
+                screen.PostEvent(Event::Custom);
+                while (!task_stop.stop_requested()) {
+                    std::string reply;
+                    {
+                        std::unique_lock lock(mutex);
+                        plan_answered.wait(lock, task_stop.get_token(),
+                                           [&] { return plan_decision.has_value(); });
+                        if (!plan_decision)
+                            break;
+                        reply = std::exchange(plan_decision, std::nullopt).value();
+                    }
+                    auto parsed = core::parse_plan_decision(reply, proposal);
+                    if (parsed.is_ok()) {
+                        std::lock_guard lock(mutex);
+                        planning = false;
+                        history += parsed.value() ? "Plan approved.\n" : "Plan rejected.\n";
+                        screen.PostEvent(Event::Custom);
+                        return parsed.value();
+                    }
+                    append(parsed.error() + "\n");
+                    std::lock_guard lock(mutex);
+                    plan_decision.reset();
+                    planning = true;
+                    screen.PostEvent(Event::Custom);
+                }
+                std::lock_guard lock(mutex);
+                planning = false;
+                return std::nullopt;
+            };
             if (query == "/undo") {
                 tools.snapshots().set_stop_token(task_stop.get_token());
                 auto result = tools.snapshots().rollback();
@@ -135,7 +188,11 @@ int run_terminal(core::ExecutionEngine &engine, core::ToolRegistry &tools, const
             } else if (auto plan_response = core::handle_plan_command(query, tools.snapshots())) {
                 append(*plan_response);
             } else {
-                auto result = engine.run(query, steps, false, task_stop.get_token());
+                const bool direct = direct_mode || query.starts_with("/direct ");
+                const auto instruction = query.starts_with("/direct ") ? query.substr(8) : query;
+                auto result = direct ? engine.run(instruction, steps, false, task_stop.get_token())
+                                     : engine.run_planned(instruction, approve_plan, steps, false,
+                                                          task_stop.get_token());
                 append(result.is_ok() ? "\n" : "\nError: " + result.error() + "\n");
             }
             {
@@ -152,6 +209,7 @@ int run_terminal(core::ExecutionEngine &engine, core::ToolRegistry &tools, const
     } cleanup{[&] {
         task_stop.request_stop();
         answered.notify_all();
+        plan_answered.notify_all();
         if (worker.joinable())
             worker.join();
         engine.set_token_callback({});

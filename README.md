@@ -38,13 +38,18 @@ all actions for that invocation. Commands have deadlines/output limits. Snapshot
 sessions live in `.platypus/`, independent of your Git history. `/undo` previews a restore.
 The shell is not a sandbox. Source-derived profiles still require real-model compatibility checks.
 Set `PLATYPUS_DEBUG_PREFIX=1` to log when the rendered system prefix changes between generations.
+Tasks use plan-first execution by default. Review the proposed steps, enter `y` to approve, `n` to
+reject, or `e: step one | step two` to edit them. Approved steps are saved to `PLAN.md`, executed
+sequentially, and marked complete after success; checks run after each step. Use `/direct <task>`
+or `--direct` for an explicit direct request. Headless planned runs require `--yes`.
 
 The interactive plan commands manage a validated, project-local `PLAN.md`: `/plan` shows it,
 `/milestone <title>` adds a milestone and captures a review baseline, `/task` adds a task,
 `/done TASK-0001` completes one, `/review` prints a bounded review
 bundle, and `/import <relative-markdown-file>` previews and asks before merging a plan. Import
-paths must stay inside the project and cannot traverse symlinks. Capturing review decisions and
-copying bundles to the clipboard are still being implemented.
+paths must stay inside the project and cannot traverse symlinks. Latest-task check statuses and
+exit codes appear in the review bundle. Capturing review decisions, copying bundles to the clipboard,
+and importing review comments as tasks are still being implemented.
 
 Project checks run after the model finishes a task and require approval. Platypus detects CMake,
 Cargo, npm, Go, and configured pytest projects; `.platypus.toml` can replace detection with direct
