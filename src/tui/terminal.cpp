@@ -23,6 +23,7 @@ int run_terminal(core::ExecutionEngine &engine, core::ToolRegistry &tools, const
     std::condition_variable_any plan_answered;
     std::string history = "Platypus — plan-first tasks; /direct <instruction> skips planning. "
                           "/plan, /milestone, /task, /done, /decision, /review, /review --copy, "
+                          "/review --remote, "
                           "/import, /review-import, /undo, or /quit\n";
     std::string input;
     std::string context_status = "Context: waiting for first request";
@@ -186,7 +187,10 @@ int run_terminal(core::ExecutionEngine &engine, core::ToolRegistry &tools, const
                 tools.snapshots().set_stop_token(task_stop.get_token());
                 auto result = tools.snapshots().rollback();
                 append(result.is_ok() ? "Snapshot restored\n" : result.error() + "\n");
-            } else if (auto plan_response = core::handle_plan_command(query, tools.snapshots())) {
+            } else if (auto plan_response = core::handle_plan_command(
+                           query, tools.snapshots(), [&](const auto &bundle) {
+                               return engine.review_remotely(bundle, task_stop.get_token());
+                           })) {
                 append(*plan_response);
             } else {
                 const bool direct = direct_mode || query.starts_with("/direct ");

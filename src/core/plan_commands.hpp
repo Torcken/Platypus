@@ -2,6 +2,8 @@
 #define PLATYPUS_CORE_PLAN_COMMANDS_HPP
 
 #include "../safety/snapshot_store.hpp"
+#include "../util/result.hpp"
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -9,8 +11,9 @@
 namespace platypus::core {
 
 /// Handle an interactive plan command, returning no value for ordinary model tasks.
-std::optional<std::string> handle_plan_command(const std::string &input,
-                                               safety::SnapshotStore &workspace);
+std::optional<std::string> handle_plan_command(
+    const std::string &input, safety::SnapshotStore &workspace,
+    const std::function<util::Result<std::string>(const std::string &)> &remote_review = {});
 
 /// Parse y/n or `e: step one | step two` for an explicitly displayed plan proposal.
 util::Result<std::optional<std::vector<std::string>>>

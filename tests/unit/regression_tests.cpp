@@ -8,10 +8,12 @@
 #include "core/review_store.hpp"
 #include "llm/chat_formatter.hpp"
 #include "llm/fake_backend.hpp"
+#include "llm/remote_provider.hpp"
 #include "llm/tool_grammar.hpp"
 #include "platform/clipboard.hpp"
 #include "platform/process.hpp"
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <random>
@@ -72,6 +74,132 @@ TEST_CASE("Plan proposals are bounded structured output and do not execute tools
     backend->set_script("invalid-proposal", {R"({"steps":["one", "two\nlines"]})"});
     REQUIRE_FALSE(engine.propose_plan("invalid-proposal").is_ok());
     REQUIRE_FALSE(fs::exists(workspace.root / "PLAN.md"));
+}
+TEST_CASE("Remote providers estimate cost, require approval, and parse both text protocols") {
+    llm::RemoteProviderConfig openai{llm::RemoteProtocol::openai_compatible,
+                                     "https://api.example.test/v1",
+                                     "test-model",
+                                     "PLATYPUS_TEST_REMOTE_KEY",
+                                     2.0,
+                                     4.0,
+                                     100};
+    const std::vector<std::pair<std::string, std::string>> messages{{"user", "hello"}};
+    auto estimate = llm::RemoteProvider(openai).estimate(messages);
+    REQUIRE(estimate.is_ok());
+    REQUIRE(estimate.value().input_tokens == 9);
+    REQUIRE(estimate.value().output_tokens == 100);
+    REQUIRE(std::abs(estimate.value().maximum_usd - 0.000418) < 1e-12);
+
+    setenv("PLATYPUS_TEST_REMOTE_KEY", "test-secret", 1);
+    bool sent = false;
+    std::vector<std::string> captured_headers;
+    std::string captured_url;
+    llm::RemoteHttpTransport fake = [&](const auto &url, const auto &headers, const auto &body,
+                                        auto) {
+        sent = true;
+        captured_url = url;
+        captured_headers = headers;
+        auto request = nlohmann::json::parse(body);
+        REQUIRE(request["model"] == "test-model");
+        return util::Result<std::string>::ok(
+            R"({"choices":[{"message":{"content":"plan feedback"}}]})");
+    };
+    llm::RemoteProvider provider(openai, fake);
+    auto declined = provider.complete(messages, [](const auto &) { return false; });
+    REQUIRE_FALSE(declined.is_ok());
+    REQUIRE_FALSE(sent);
+    std::string estimate_prompt;
+    auto approved = provider.complete(messages, [&](const auto &preview) {
+        estimate_prompt = preview;
+        return true;
+    });
+    REQUIRE(approved.is_ok());
+    REQUIRE(approved.value().content == "plan feedback");
+    REQUIRE(estimate_prompt.find("$0.000418 USD") != std::string::npos);
+    REQUIRE(sent);
+    REQUIRE(captured_url == "https://api.example.test/v1/chat/completions");
+    REQUIRE(std::find(captured_headers.begin(), captured_headers.end(),
+                      "Authorization: Bearer test-secret") != captured_headers.end());
+
+    openai.protocol = llm::RemoteProtocol::anthropic_messages;
+    openai.endpoint = "https://api.anthropic.com";
+    fake = [&](const auto &url, const auto &headers, const auto &body, auto) {
+        REQUIRE(url == "https://api.anthropic.com/v1/messages");
+        auto request = nlohmann::json::parse(body);
+        REQUIRE(request["system"] == "system context");
+        REQUIRE(request["messages"].size() == 1);
+        REQUIRE(std::find(headers.begin(), headers.end(), "anthropic-version: 2023-06-01") !=
+                headers.end());
+        return util::Result<std::string>::ok(
+            R"({"content":[{"type":"text","text":"review feedback"}]})");
+    };
+    auto anthropic = llm::RemoteProvider(openai, fake)
+                         .complete({{"system", "system context"}, {"user", "review bundle"}},
+                                   [](const auto &) { return true; });
+    REQUIRE(anthropic.is_ok());
+    REQUIRE(anthropic.value().content == "review feedback");
+    unsetenv("PLATYPUS_TEST_REMOTE_KEY");
+}
+TEST_CASE("Remote provider settings require explicit endpoint model prices and token cap") {
+    Workspace workspace;
+    auto absent = llm::load_remote_provider_config(workspace.root);
+    REQUIRE(absent.is_ok());
+    REQUIRE_FALSE(absent.value().has_value());
+    std::ofstream(workspace.root / ".platypus.toml")
+        << "[remote]\nprovider='openai-compatible'\nendpoint='http://localhost:8080'\n"
+           "model='sample'\napi_key_env='SAMPLE_KEY'\ninput_usd_per_million=1.0\n"
+           "output_usd_per_million=2.0\nmax_output_tokens=200\n";
+    REQUIRE_FALSE(llm::load_remote_provider_config(workspace.root).is_ok());
+    std::ofstream(workspace.root / ".platypus.toml")
+        << "[remote]\nprovider='openai-compatible'\nendpoint='https://api.example.test/v1'\n"
+           "model='sample'\napi_key_env='SAMPLE_KEY'\ninput_usd_per_million=1.0\n"
+           "output_usd_per_million=2.0\nmax_output_tokens=200\n";
+    auto configured = llm::load_remote_provider_config(workspace.root);
+    REQUIRE(configured.is_ok());
+    REQUIRE(configured.value()->model == "sample");
+    REQUIRE(configured.value()->max_output_tokens == 200);
+}
+TEST_CASE("Engine uses approved remote calls for proposals and reviews only") {
+    Workspace workspace;
+    setenv("PLATYPUS_TEST_REMOTE_KEY", "test-secret", 1);
+    std::size_t requests = 0;
+    llm::RemoteProviderConfig config{llm::RemoteProtocol::openai_compatible,
+                                     "https://api.example.test/v1",
+                                     "test-model",
+                                     "PLATYPUS_TEST_REMOTE_KEY",
+                                     1.0,
+                                     1.0,
+                                     8192};
+    auto remote = std::make_shared<llm::RemoteProvider>(
+        config, [&](const auto &, const auto &, const auto &body, auto) {
+            ++requests;
+            auto request = nlohmann::json::parse(body);
+            REQUIRE(request["store"] == false);
+            if (requests == 1)
+                REQUIRE(request["max_tokens"] <= 512);
+            return util::Result<std::string>::ok(
+                requests == 1
+                    ? R"({"choices":[{"message":{"content":"{\"steps\":[\"Inspect code\"]}"}}]})"
+                    : R"({"choices":[{"message":{"content":"Review: no blocking findings."}}]})");
+        });
+    std::size_t confirmations = 0;
+    auto registry = std::make_shared<core::ToolRegistry>(workspace.root, [&](const auto &) {
+        ++confirmations;
+        return true;
+    });
+    core::register_default_tools(*registry);
+    auto local_backend = std::make_shared<llm::FakeBackend>();
+    core::ExecutionEngine engine(local_backend, registry);
+    engine.set_remote_provider(remote);
+    auto proposal = engine.propose_plan("Add a feature");
+    REQUIRE(proposal.is_ok());
+    REQUIRE(proposal.value() == std::vector<std::string>{"Inspect code"});
+    auto review = engine.review_remotely("# Bounded review bundle");
+    REQUIRE(review.is_ok());
+    REQUIRE(review.value() == "Review: no blocking findings.");
+    REQUIRE(requests == 2);
+    REQUIRE(confirmations == 2);
+    unsetenv("PLATYPUS_TEST_REMOTE_KEY");
 }
 TEST_CASE("Approved plans persist, execute sequentially, and complete successful tasks") {
     Workspace workspace;
@@ -310,6 +438,14 @@ TEST_CASE("Interactive plan commands validate and confirm plan mutations") {
     REQUIRE(review->find("Milestone Review: Implement") != std::string::npos);
     REQUIRE(review->find("implementation.cpp") != std::string::npos);
     REQUIRE(review->find("No project check results are stored") != std::string::npos);
+    auto remote_review =
+        core::handle_plan_command("/review --remote", store, [&](const auto &bundle) {
+            REQUIRE(bundle.find("implementation.cpp") != std::string::npos);
+            return util::Result<std::string>::ok("Consider the new regression coverage.");
+        });
+    REQUIRE(remote_review.has_value());
+    REQUIRE(remote_review->find("Remote review feedback") != std::string::npos);
+    REQUIRE(remote_review->find("Consider the new regression coverage") != std::string::npos);
     REQUIRE(core::handle_plan_command("/done TASK-0001", store)->find("Completed") !=
             std::string::npos);
     REQUIRE(approvals == 3);

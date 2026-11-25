@@ -8,6 +8,7 @@ add_library(llm STATIC
     llama_server_backend.cpp
     llm_backend_factory.cpp
     model_profile.cpp
+    remote_provider.cpp
     tool_grammar.cpp
 )
 

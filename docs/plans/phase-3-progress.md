@@ -16,13 +16,16 @@
   capped at 64 KiB (ADR-023).
 - [x] Detect CMake/Cargo/npm/Go/pytest checks, load `.platypus.toml` argv overrides, require
   approval, return untrusted failures to the model, and cap repair attempts at three (ADR-021).
-- [ ] Optional remote providers with estimate-before-send and fake transport tests.
+- [x] Optional OpenAI-compatible and Anthropic Messages providers are restricted to planning and
+  review, show configured-rate estimates, require confirmation before every request, and use
+  environment-only keys; both protocols have fake transport coverage (ADR-024).
 - [x] FakeBackend integration test covers the full offline plan → execute → check → review →
   decision → comment-import cycle.
 - [x] Dev, ASan, and UBSan suites (9/9 each), benchmark tests (41/41), and formatter checks pass.
   Focused clang-tidy is not clean: it reports logger enum/stream, registry vector-growth,
   `SnapshotStore`/backend/engine stop-token, and TUI event-parameter suggestions.
 
-The full offline Phase 3 integration cycle is implemented and verified. Clipboard provider
-availability and real-model proposal quality require platform/model checks; optional remote review
-providers remain unimplemented.
+The full offline Phase 3 integration cycle and fake-transport remote provider paths are implemented
+and verified. Clipboard provider availability and real-model proposal/review quality require
+platform and account checks. Provider API behavior, billing estimates, and current configured rates
+remain unverified against live services.

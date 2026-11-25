@@ -52,6 +52,11 @@ tasks to the latest milestone. `/review --copy` asks before copying the bundle t
 clipboard. Import paths must stay inside the project and cannot traverse symlinks. Latest-task
 check statuses, exit codes, and milestone decisions appear in the bundle. Clipboard copying uses
 `wl-copy`, `xclip`, or `xsel` on Linux and `pbcopy` on macOS.
+With an optional `[remote]` configuration, proposed plans can use a remote model and
+`/review --remote` sends the current bounded review bundle for feedback. Each request shows a
+configured-rate cost estimate and requires approval. Credentials are read only from the named
+environment variable; project files do not store API keys. The byte-based input estimate is not a
+provider tokenizer or a billing guarantee. See `docs/decisions/ADR-024-remote-plan-review.md`.
 
 Project checks run after the model finishes a task and require approval. Platypus detects CMake,
 Cargo, npm, Go, and configured pytest projects; `.platypus.toml` can replace detection with direct
@@ -60,7 +65,20 @@ argument arrays, for example:
 ```toml
 [checks]
 commands = [{ name = "unit tests", argv = ["python3", "-m", "unittest"] }]
+
+[remote]
+provider = "openai-compatible" # or "anthropic-messages"
+endpoint = "https://api.openai.com/v1"
+model = "your-model-id"
+api_key_env = "PLATYPUS_REMOTE_API_KEY"
+input_usd_per_million = 1.0
+output_usd_per_million = 4.0
+max_output_tokens = 1024
 ```
+
+Set the named credential in the shell before launching Platypus. Replace the sample rates with
+current provider rates; the application does not fetch or guess pricing. The provider must use
+HTTPS.
 
 No shell is added around configured arguments. A failing check is returned to the model as
 untrusted output for up to three repair attempts.

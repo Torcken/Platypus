@@ -3,6 +3,7 @@
 
 #include "../llm/backend.hpp"
 #include "../llm/chat_formatter.hpp"
+#include "../llm/remote_provider.hpp"
 #include "../util/logger.hpp"
 #include "../util/result.hpp"
 #include "agent/context_manager.hpp"
@@ -63,6 +64,12 @@ class ExecutionEngine {
     /// Ask the configured backend for a bounded, structured task proposal without running tools.
     util::Result<std::vector<std::string>> propose_plan(const std::string &query,
                                                         std::stop_token stop = {});
+    /// Attach the optional cost-gated provider used only for plan and review prompts.
+    void set_remote_provider(std::shared_ptr<llm::RemoteProvider> provider) {
+        remote_provider_ = std::move(provider);
+    }
+    /// Ask the configured remote provider for milestone feedback after its cost prompt.
+    util::Result<std::string> review_remotely(const std::string &bundle, std::stop_token stop = {});
 
     /// Propose, approve or edit, persist, then execute plan steps sequentially.
     util::Result<std::string> run_planned(const std::string &query, const PlanApprover &approve,
@@ -89,6 +96,7 @@ class ExecutionEngine {
     std::string build_prompt(const std::vector<std::pair<std::string, std::string>> &history);
 
     std::shared_ptr<llm::LlmBackend> backend_;
+    std::shared_ptr<llm::RemoteProvider> remote_provider_;
     std::shared_ptr<ToolRegistry> tool_registry_;
     std::unique_ptr<agent::ContextManager> context_manager_;
 

@@ -32,8 +32,9 @@ bool valid_decision_text(const std::string &text) {
 }
 } // namespace
 
-std::optional<std::string> handle_plan_command(const std::string &input,
-                                               safety::SnapshotStore &workspace) {
+std::optional<std::string> handle_plan_command(
+    const std::string &input, safety::SnapshotStore &workspace,
+    const std::function<util::Result<std::string>(const std::string &)> &remote_review) {
     PlanStore plan(workspace.root());
     if (input == "/plan") {
         auto loaded = plan.load();
@@ -122,15 +123,17 @@ std::optional<std::string> handle_plan_command(const std::string &input,
             response += "- " + id + "\n";
         return response;
     }
-    if (input == "/review" || input == "/review --copy" || input.starts_with("/review ")) {
+    if (input == "/review" || input == "/review --copy" || input == "/review --remote" ||
+        input.starts_with("/review ")) {
         const bool copy_bundle = input == "/review --copy";
+        const bool ask_remote = input == "/review --remote";
         auto loaded = plan.load();
         if (!loaded.is_ok())
             return failure(loaded.error());
         if (loaded.value().empty())
             return failure("create a milestone before requesting a review");
         std::size_t index = loaded.value().size() - 1;
-        if (input != "/review" && !copy_bundle) {
+        if (input != "/review" && !copy_bundle && !ask_remote) {
             auto number = input.substr(8);
             std::size_t selected = 0;
             auto parsed = std::from_chars(number.data(), number.data() + number.size(), selected);
@@ -198,6 +201,19 @@ std::optional<std::string> handle_plan_command(const std::string &input,
             if (!copied.is_ok())
                 return bundle + "\nClipboard copy failed: " + copied.error() + "\n";
             bundle += "\nCopied review bundle to clipboard.\n";
+        }
+        if (ask_remote) {
+            if (!remote_review)
+                return failure("remote review is unavailable");
+            auto feedback = remote_review(bundle);
+            if (!feedback.is_ok())
+                return bundle + "\nRemote review failed: " + feedback.error() + "\n";
+            auto bounded = feedback.value();
+            if (bounded.size() > kMaxReviewBytes) {
+                bounded.resize(kMaxReviewBytes);
+                bounded += "\n[Remote feedback truncated]\n";
+            }
+            bundle += "\n## Remote review feedback\n\n" + bounded + "\n";
         }
         return bundle;
     }

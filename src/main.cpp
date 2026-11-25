@@ -113,6 +113,12 @@ int main(int argc, char *argv[]) {
             real->set_profile(profile.value());
         }
         core::ExecutionEngine engine(std::move(backend), tools);
+        auto remote_config = llm::load_remote_provider_config(tools->snapshots().root());
+        if (!remote_config.is_ok())
+            throw std::runtime_error(remote_config.error());
+        if (remote_config.value())
+            engine.set_remote_provider(
+                std::make_shared<llm::RemoteProvider>(*remote_config.value()));
         auto sessions = std::make_shared<session::Store>(tools->snapshots().root());
         auto selected =
             resume ? sessions->load(resume_id)
@@ -192,6 +198,7 @@ int main(int argc, char *argv[]) {
             throw std::runtime_error("Headless mode requires an instruction");
         std::cout << "Platypus — plan-first tasks; /direct <instruction> skips planning. "
                      "/plan, /milestone, /task, /done, /decision, /review, /review --copy, "
+                     "/review --remote, "
                      "/import, /review-import, /undo, /quit\n";
         while (!source.stop_requested()) {
             std::cout << "> " << std::flush;
@@ -201,7 +208,10 @@ int main(int argc, char *argv[]) {
                 auto result = tools->snapshots().rollback();
                 std::cout << (result.is_ok() ? "Snapshot restored" : result.error()) << '\n';
             } else if (!task.empty()) {
-                auto plan_response = core::handle_plan_command(task, tools->snapshots());
+                auto plan_response =
+                    core::handle_plan_command(task, tools->snapshots(), [&](const auto &bundle) {
+                        return engine.review_remotely(bundle, source.get_token());
+                    });
                 if (plan_response)
                     std::cout << *plan_response;
                 else
