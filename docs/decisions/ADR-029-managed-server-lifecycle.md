@@ -8,9 +8,10 @@ readiness, and terminate it cleanly. Model-load OOMs need a bounded recovery pat
 ## Decision
 
 Use reproc++ to own the child process. Bind the server to `127.0.0.1`, pass the selected model path
-as an argument, poll `/health` until a bounded timeout, and terminate then kill on shutdown. The
-caller may request at most three OOM restarts (one by default), and receives an error once the cap is
-reached. Process startup and health checks are injectable for offline tests.
+and context size as arguments, poll `/health` until a bounded timeout, and terminate then kill on
+shutdown. The caller may request at most three OOM restarts (one by default); each halves the
+context down to a configured floor. Process startup and health checks are injectable for offline
+tests.
 
 ## Consequences
 

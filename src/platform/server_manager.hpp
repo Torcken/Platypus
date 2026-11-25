@@ -15,6 +15,8 @@ struct ServerConfig {
     std::filesystem::path executable;
     std::filesystem::path model;
     unsigned short port = 8080;
+    std::size_t context_tokens = 32768;
+    std::size_t minimum_context_tokens = 4096;
     std::chrono::milliseconds readiness_timeout{60000};
     unsigned int maximum_oom_restarts = 1;
 };

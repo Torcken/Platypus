@@ -45,7 +45,9 @@ util::Result<std::shared_ptr<ServerProcess>> launch_server(const ServerConfig &c
                                              "--host",
                                              "127.0.0.1",
                                              "--port",
-                                             std::to_string(config.port)};
+                                             std::to_string(config.port),
+                                             "--ctx-size",
+                                             std::to_string(config.context_tokens)};
     const auto error = process->start(arguments, options);
     if (error)
         return Return::fail("Cannot start llama-server: " + error.message());
@@ -94,6 +96,9 @@ util::Result<util::Void> ServerManager::start() {
         return Return::fail("llama-server readiness timeout or port is invalid");
     if (config_.maximum_oom_restarts > 3)
         return Return::fail("llama-server OOM restart limit cannot exceed three");
+    if (config_.minimum_context_tokens == 0 ||
+        config_.context_tokens < config_.minimum_context_tokens)
+        return Return::fail("llama-server context size is below the configured minimum");
     if (process_ && process_->is_running())
         return Return::fail("llama-server is already running");
     process_.reset();
@@ -120,7 +125,12 @@ util::Result<util::Void> ServerManager::start() {
 util::Result<util::Void> ServerManager::restart_after_out_of_memory() {
     if (oom_restarts_ >= config_.maximum_oom_restarts)
         return util::Result<util::Void>::fail("llama-server OOM restart limit reached");
+    const auto reduced_context = config_.context_tokens / 2;
+    if (reduced_context < config_.minimum_context_tokens)
+        return util::Result<util::Void>::fail(
+            "llama-server cannot reduce context below its minimum");
     ++oom_restarts_;
+    config_.context_tokens = reduced_context;
     stop();
     return start();
 }

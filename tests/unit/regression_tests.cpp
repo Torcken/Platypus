@@ -323,10 +323,12 @@ TEST_CASE("Managed llama-server waits for health and bounds OOM restarts") {
         void stop() noexcept override { running = false; }
     };
     auto launches = std::make_shared<unsigned int>(0);
+    auto contexts = std::make_shared<std::vector<std::size_t>>();
     platform::ServerManager manager(
-        {"llama-server", "model.gguf", 8123, std::chrono::milliseconds(1000), 1},
-        [launches](const auto &) {
+        {"llama-server", "model.gguf", 8123, 16384, 4096, std::chrono::milliseconds(1000), 1},
+        [launches, contexts](const auto &config) {
             ++*launches;
+            contexts->push_back(config.context_tokens);
             std::shared_ptr<platform::ServerProcess> process = std::make_shared<FakeProcess>();
             return util::Result<std::shared_ptr<platform::ServerProcess>>::ok(std::move(process));
         },
@@ -334,8 +336,10 @@ TEST_CASE("Managed llama-server waits for health and bounds OOM restarts") {
     REQUIRE(manager.endpoint() == "http://127.0.0.1:8123");
     REQUIRE(manager.start().is_ok());
     REQUIRE(*launches == 1);
+    REQUIRE(contexts->at(0) == 16384);
     REQUIRE(manager.restart_after_out_of_memory().is_ok());
     REQUIRE(*launches == 2);
+    REQUIRE(contexts->at(1) == 8192);
     REQUIRE_FALSE(manager.restart_after_out_of_memory().is_ok());
     manager.stop();
 }
@@ -345,7 +349,7 @@ TEST_CASE("Managed llama-server fails closed when the child exits before readine
         void stop() noexcept override {}
     };
     platform::ServerManager manager(
-        {"llama-server", "model.gguf", 8124, std::chrono::milliseconds(1000), 1},
+        {"llama-server", "model.gguf", 8124, 32768, 4096, std::chrono::milliseconds(1000), 1},
         [](const auto &) {
             std::shared_ptr<platform::ServerProcess> process = std::make_shared<ExitedProcess>();
             return util::Result<std::shared_ptr<platform::ServerProcess>>::ok(std::move(process));
