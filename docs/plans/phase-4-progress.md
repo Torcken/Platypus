@@ -33,9 +33,10 @@
   Homebrew formula, release updater, and assisted-free acceptance remain.
 - [ ] Extend CI for the supported Linux/macOS release targets and supported backend builds.
   Existing Linux GCC/Clang/sanitizer and macOS arm64 jobs now provision OpenSSL Crypto; an optional
-  Vulkan-header Linux job, pinned CPU llama-server build, and install/catalog smoke step were added.
-  The locally installed Platypus binary and model catalog smoke check pass. Hosted CI has not been
-  triggered from this environment.
+  Linux Vulkan job builds the pinned server with Vulkan; macOS arm64 also builds it with the native
+  Metal backend, alongside the pinned CPU server and install/catalog smoke step. The locally
+  installed Platypus binary and model catalog smoke check pass. CUDA 12/13, hosted CI, and supported
+  GPU execution remain unverified.
 - [x] Run all local verification presets: dev, ASan, UBSan (9/9 CTest tests each) and Python (41 tests).
 - [ ] Document remote CI outcomes when supported-host workflows are available.
 - [ ] Human: verify unsupported-by-default installation on five machines, including AMD 6 GB,

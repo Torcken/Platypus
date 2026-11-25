@@ -42,6 +42,13 @@ jobs:
       - run: cmake --build --preset ${{ matrix.preset }}
       - run: ctest --preset ${{ matrix.preset }} --output-on-failure
       - run: python3 -m unittest discover -s bench/tests -v
+      - name: Build pinned Metal llama-server
+        if: runner.os == 'macOS'
+        run: |
+          PLATYPUS_INSTALL_PREFIX="$RUNNER_TEMP/platypus-metal" \
+            PLATYPUS_BUILD_DIR="$RUNNER_TEMP/platypus-metal-build" \
+            PLATYPUS_BUILD_JOBS=2 scripts/build-llama-server.sh
+          "$RUNNER_TEMP/platypus-metal/bin/llama-server" --version | grep 'commit 2d8a32502'
       - name: Install and catalog smoke test
         run: |
           prefix="$RUNNER_TEMP/platypus-install"
@@ -55,10 +62,17 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
       - name: Vulkan build dependencies
-        run: sudo apt-get update && sudo apt-get install -y ninja-build g++ libcurl4-openssl-dev libsqlite3-dev libssl-dev libvulkan-dev
+        run: sudo apt-get update && sudo apt-get install -y ninja-build g++ libcurl4-openssl-dev libsqlite3-dev libssl-dev libvulkan-dev glslc spirv-headers
       - run: cmake --preset dev
       - run: cmake --build --preset dev
       - run: ctest --preset dev --output-on-failure
+      - name: Build pinned Vulkan llama-server
+        run: |
+          PLATYPUS_LLAMA_BACKEND=vulkan \
+            PLATYPUS_INSTALL_PREFIX="$RUNNER_TEMP/platypus-vulkan" \
+            PLATYPUS_BUILD_DIR="$RUNNER_TEMP/platypus-vulkan-build" \
+            PLATYPUS_BUILD_JOBS=2 scripts/build-llama-server.sh
+          "$RUNNER_TEMP/platypus-vulkan/bin/llama-server" --version | grep 'commit 2d8a32502'
   pinned-server:
     runs-on: ubuntu-24.04
     steps:
