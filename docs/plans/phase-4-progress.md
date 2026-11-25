@@ -34,7 +34,10 @@
   interactive session. Its full download/server path still needs a real-model installation test.
   The pinned-server build selects Metal, CUDA, Vulkan, or CPU from the build host by default;
   explicit backend overrides remain available. Homebrew formula, release updater, and assisted-free
-  acceptance remain.
+  acceptance remain. A temporary-prefix Linux installer run built and installed both binaries; its
+  smoke wrapper stopped because it compared llama-server's `1.0.0-dev` version label with Platypus's
+  `0.1.0`. Direct CLI checks pass: `platypus --version` prints `0.1.0`, and `platypus models list`
+  lists all five catalog entries.
 - [ ] Extend CI for the supported Linux/macOS release targets and supported backend builds.
   Existing Linux GCC/Clang/sanitizer and macOS arm64 jobs now provision OpenSSL Crypto; an optional
   Linux Vulkan job builds the pinned server with Vulkan; CUDA 12.9.1 and CUDA 13.0.0 container jobs
