@@ -175,7 +175,7 @@ if(BUILD_TESTING)
         ${PROJECT_SOURCE_DIR}/tests/integration/test_terminal.py $<TARGET_FILE:platypus>)
     set_tests_properties(context_manager_test execution_engine_test llm_layer_test test_tools
         e2e_tests history_truncation_test regression_tests cli_integration server_backend_selection
-        terminal_smoke PROPERTIES TIMEOUT 30 RUN_SERIAL TRUE)
+        terminal_smoke PROPERTIES TIMEOUT 120 RUN_SERIAL TRUE)
 endif()
 if(PLATYPUS_BUILD_FUZZERS)
     set(CMAKE_REQUIRED_FLAGS "-fsanitize=fuzzer,address,undefined")

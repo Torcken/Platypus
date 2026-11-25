@@ -2,9 +2,9 @@
 
 ## Review fixes — 2026-11-25
 
-The repository is now public (human decision). Branch `phase-4` and tag `v0.1.0`
-were pushed at `d0eaf5f`. Hosted CI now starts, but the tagged release failed its
-verification gate; no successful release is claimed.
+The repository and `phase-4` branch are public. Tag `v0.1.0` points to `d0eaf5f`; its
+release verification failed, so no successful release is claimed. No versioned release
+bundles are published yet.
 
 This review fixes fresh llama.cpp clones being rejected as dirty, allows no modified
 source at the pinned revision, installs ripgrep in CI, resolves installed catalogs
@@ -12,8 +12,12 @@ relative to the executable, and retains updater recovery files if rollback fails
 Interruptions now attempt restoration as well. See [the review record](review-2026-11-25.md).
 
 Verification after these fixes: dev, ASan, and UBSan each passed 10/10 CTest tests;
-41 benchmark tests and 9 installer/updater tests passed. Loopback fixture tests required
-execution outside the filesystem/network sandbox. Hosted validation of these fixes is pending.
+41 benchmark tests and 9 installer/updater tests passed. Hosted Linux GCC/Clang and sanitizer
+jobs passed. Hosted macOS exposed test timeout assumptions, now hardened locally; the latest
+hosted rerun is pending. Vulkan and pinned-server builds completed, but their smoke checks
+initially expected a longer llama-server revision string than the binary reports; fixed in
+`f15aff6` and awaiting a hosted rerun. Loopback fixture tests required execution outside the
+filesystem/network sandbox.
 
 
 - [x] Resolve Windows v1.0 support before platform work (ADR-025).
@@ -59,16 +63,12 @@ execution outside the filesystem/network sandbox. Hosted validation of these fix
   The pinned-server build selects Metal, CUDA, Vulkan, or CPU from the build host by default;
   explicit backend overrides remain available. The canonical source URL is
   `https://github.com/Torcken/Platypus` and is recorded in CMake metadata and installation docs.
-  Private versioned release bundles and `platypus update` are implemented for Linux CPU, Vulkan,
+  Versioned release bundles and `platypus update` are implemented for Linux CPU, Vulkan,
   CUDA 12/13, and macOS Metal. The release workflow gates publishing on Linux verification, checks
   the project tag, packages each target, emits SHA-256 checksums, and publishes the assets; offline
-  tests cover archive validation and rollback. The tag workflow and a real private release have not
-  yet run. Human decision: keep the
-  repository private until Platypus is production grade. Authenticated SSH
-  inspection found remote `main` contains only the initial README/LICENSE commit, with no tags or
-  releases. This `phase-4` development branch remains local and unpushed. Homebrew and assisted-free
-  macOS setup remain open; private contributors can install from an authorized source checkout and
-  beta users can update from an authorized private release.
+  tests cover archive validation and rollback. A successful tag workflow and published release have
+  not yet been verified. The repository is public and `phase-4` is pushed; `main` remains separate.
+  Homebrew and assisted-free macOS setup remain open.
   Assisted-free acceptance remains. A temporary-prefix Linux installer run built and installed both
   binaries; its
   smoke wrapper stopped because it compared llama-server's `1.0.0-dev` version label with Platypus's
@@ -88,7 +88,8 @@ execution outside the filesystem/network sandbox. Hosted validation of these fix
   All three CTest presets passed 10/10; Python passed 41 benchmark tests and 6 private release/update
   tests. Fake HTTP/process tests verify one reduced-context retry and no replay after
   partial output. Real-model OOM and setup sample execution remain unverified.
-- [ ] Document remote CI outcomes when supported-host workflows are available.
+- [ ] Document final remote CI outcomes after the corrected macOS test timeouts and revision checks
+  pass on the supported-host workflow.
 - [ ] Human: verify unsupported-by-default installation on five machines, including AMD 6 GB,
   M1 16 GB, and Titan V.
 

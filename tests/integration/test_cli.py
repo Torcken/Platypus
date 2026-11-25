@@ -76,7 +76,7 @@ with tempfile.TemporaryDirectory(prefix="platypus-oom-retry-") as temporary:
     result = subprocess.run(
         [binary, "run", "--project", temporary, "--endpoint", endpoint,
          "--managed-model", str(model_file), "--server-bin", str(server_bin)],
-        input="", capture_output=True, text=True, timeout=15)
+        input="", capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr
     assert "Managed llama-server ready" in result.stderr
     assert arguments_file.is_file(), result.stderr + result.stdout

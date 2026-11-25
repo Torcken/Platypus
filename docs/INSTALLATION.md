@@ -25,8 +25,8 @@ The installer does not download model files.
 On Apple silicon, use `scripts/install-macos.sh` from the checked-out repository. It uses the same
 prefix and build-directory overrides, builds Platypus and the pinned llama-server with Metal, and
 does not require root access. Install CMake 3.24+, Ninja, Xcode Command Line Tools, Git, and the
-project's Homebrew development dependencies first. Because the repository is private during
-development, contributors and beta testers need authorized GitHub access to clone it.
+project's Homebrew development dependencies first. The source repository is public, so cloning it
+does not require GitHub authentication.
 
 After install, add `~/.local/bin` to `PATH`, then inspect available models and hardware-aware
 recommendations:
@@ -47,11 +47,12 @@ Launch the pinned llama-server manually as described in ADR-002. Five-machine in
 acceptance, including AMD 6 GB, M1 16 GB, and Titan V hardware, is a human exit criterion and remains
 open.
 
-## Private beta updates
+## Release updates
 
-Version-tagged releases are private while the repository is private. Sign in with GitHub CLI on
-each machine (`gh auth login --hostname github.com`) or provide a short-lived `GH_TOKEN` with access
-to the repository's releases (a fine-grained token needs repository Contents read access), then run:
+Versioned release bundles have not been published yet. When a public release is available, it can be
+downloaded without signing in. For private release testing, sign in with GitHub CLI
+(`gh auth login --hostname github.com`) or provide a short-lived `GH_TOKEN` with repository Contents
+read access, then run:
 
 ```sh
 platypus update
@@ -60,5 +61,4 @@ platypus update
 The updater selects the installed OS/backend bundle, verifies its SHA-256, and updates the client,
 server, updater, catalog, and profiles. It does not touch downloaded models or project files. Linux x86_64
 supports CPU, Vulkan, CUDA 12, and CUDA 13 release bundles; macOS arm64 supports Metal. A local
-macOS CPU-only source build is supported, but the private release channel currently publishes Metal
-bundles only.
+macOS CPU-only source build is supported; the macOS release target is Metal.

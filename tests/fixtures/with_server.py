@@ -132,12 +132,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(data[index:index+7])
             self.wfile.flush()
 
-with http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+class FixtureServer(http.server.ThreadingHTTPServer):
+    daemon_threads = True
+    block_on_close = False
+
+
+with FixtureServer(("127.0.0.1", 0), Handler) as server:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     env = dict(os.environ, PLATYPUS_TEST_SERVER=f"http://127.0.0.1:{server.server_port}")
     try:
-        result = subprocess.run(sys.argv[1:], env=env, timeout=20)
+        result = subprocess.run(sys.argv[1:], env=env, timeout=60)
     finally:
         server.shutdown()
         thread.join()
