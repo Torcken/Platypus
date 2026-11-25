@@ -18,6 +18,12 @@
 #include <filesystem>
 #endif
 
+#ifdef __APPLE__
+namespace platypus::platform {
+std::vector<GpuInfo> macos_metal_gpus();
+}
+#endif
+
 namespace platypus::platform {
 namespace {
 std::string cpu_architecture() {
@@ -184,6 +190,11 @@ std::vector<GpuInfo> linux_drm_gpus() {
 #endif
 
 std::vector<GpuInfo> system_gpus() {
+#ifdef __APPLE__
+    auto metal_devices = macos_metal_gpus();
+    if (!metal_devices.empty())
+        return metal_devices;
+#endif
 #ifdef PLATYPUS_HAVE_VULKAN
     auto devices = vulkan_gpus();
     if (!devices.empty())
@@ -191,6 +202,8 @@ std::vector<GpuInfo> system_gpus() {
 #endif
 #ifdef __linux__
     return linux_drm_gpus();
+#elif defined(__APPLE__)
+    return {};
 #else
     return {};
 #endif

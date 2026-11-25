@@ -6,8 +6,9 @@
   estimates pending hardware and model-quality evidence.
 - [ ] Add Linux/macOS CPU, memory, GPU architecture, and VRAM detection with graceful fallbacks.
   In progress: CPU/RAM and architecture inventory, optional Vulkan device-local heap probe, Linux
-  DRM VRAM fallback, deterministic primary-GPU choice, and GPU-absent tests are implemented. NVML,
-  native macOS Metal/unified-memory reporting, and supported-host hardware validation remain.
+  DRM VRAM fallback, deterministic primary-GPU choice, native macOS Metal unified-memory capacity,
+  and GPU-absent tests are implemented. NVIDIA NVML probing and supported-host hardware validation
+  remain; Metal compilation awaits the macOS CI run.
 - [ ] Implement resumable, bounded HTTPS downloads with progress and SHA-256 checks.
   In progress: catalog-only Hugging Face HTTPS URLs, size cap, resumable `.part` files, HTTPS-only
   redirects, progress and cancellation callbacks, OpenSSL SHA-256 verification, and atomic
