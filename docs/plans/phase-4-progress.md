@@ -42,9 +42,10 @@
   Existing Linux GCC/Clang/sanitizer and macOS arm64 jobs now provision OpenSSL Crypto; an optional
   Linux Vulkan job builds the pinned server with Vulkan; CUDA 12.9.1 and CUDA 13.0.0 container jobs
   build the pinned CUDA server; macOS arm64 also builds it with the native Metal backend, alongside
-  the pinned CPU server and install/catalog smoke step. The locally installed Platypus binary and
-  model catalog smoke check pass. All new backend jobs and supported GPU execution remain
-  unverified.
+  the pinned CPU server and install/catalog smoke step. The Linux pinned CPU job now runs the full
+  source installer and checks the installed CLI version, catalog, and server revision. The locally
+  installed Platypus binary and model catalog smoke check pass. Hosted CI outcomes and supported GPU
+  execution remain unverified.
 - [x] Run all local verification presets: dev, ASan, UBSan (10/10 CTest tests each) and Python (41 tests).
 - [ ] Document remote CI outcomes when supported-host workflows are available.
 - [ ] Human: verify unsupported-by-default installation on five machines, including AMD 6 GB,
