@@ -17,8 +17,9 @@
 - [ ] Manage the pinned llama-server lifecycle, readiness, bounded OOM restart, and shutdown.
   In progress: reproc-backed child ownership, loopback-only launch, bounded readiness polling,
   explicit bounded OOM recovery by the caller (each restart halves context to a configured floor),
-  and guaranteed shutdown are implemented with fake process and health probes. Runtime integration
-  with model-load errors and bundled pinned llama-server remain.
+  and guaranteed shutdown are implemented with fake process and health probes. `run
+  --managed-model` now integrates process start/readiness/shutdown into CLI runs; the caller still
+  must classify model-load errors, and bundled pinned llama-server remains.
 - [ ] Add setup wizard, Linux installer, Homebrew formula, update command, and distribution docs.
   In progress: `platypus models list`, `recommend`, and `download` use the validated catalog,
   detected host facts, and verified downloader; source-tree and install catalog lookup are wired.

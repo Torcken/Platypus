@@ -1,6 +1,7 @@
 // Bounded llama-server startup, readiness, restart, and shutdown.
 #include "server_manager.hpp"
 
+#include <cerrno>
 #include <curl/curl.h>
 #include <memory>
 #include <reproc++/reproc.hpp>
@@ -17,7 +18,7 @@ class ReprocServerProcess final : public ServerProcess {
     bool is_running() override {
         const auto [status, error] = process_->wait(reproc::milliseconds(0));
         (void)status;
-        return error == std::make_error_code(std::errc::timed_out);
+        return error.value() == ETIMEDOUT;
     }
 
     void stop() noexcept override {
@@ -63,7 +64,8 @@ bool health_request(const std::string &endpoint) {
     std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), curl_easy_cleanup);
     if (!curl)
         return false;
-    curl_easy_setopt(curl.get(), CURLOPT_URL, endpoint.c_str());
+    const auto health_url = endpoint + "/health";
+    curl_easy_setopt(curl.get(), CURLOPT_URL, health_url.c_str());
     curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT_MS, 500L);
     curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT_MS, 1000L);
     curl_easy_setopt(curl.get(), CURLOPT_NOSIGNAL, 1L);
@@ -110,11 +112,14 @@ util::Result<util::Void> ServerManager::start() {
         return Return::fail("llama-server launcher returned no process");
     const auto deadline = std::chrono::steady_clock::now() + config_.readiness_timeout;
     while (std::chrono::steady_clock::now() < deadline) {
-        if (!process_->is_running()) {
+        const auto running = process_->is_running();
+        if (!running) {
+            process_->stop();
             process_.reset();
             return Return::fail("llama-server exited before becoming ready");
         }
-        if (health_probe_(endpoint()))
+        const auto ready = health_probe_(endpoint());
+        if (ready)
             return Return::ok();
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }

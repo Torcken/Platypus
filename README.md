@@ -26,11 +26,14 @@ need network access; cached builds and fixture tests run without external servic
 Start your llama-server separately, using the release pinned in ADR-002. Model commands read the
 versioned catalog in `profiles/catalog.json`; set `PLATYPUS_MODEL_CATALOG` to use another catalog.
 Downloads go to `~/.local/share/platypus/models/` by default and are size and SHA-256 verified
-before finalization.
+before finalization. `--managed-model FILE` starts `llama-server` from `PATH` (override with
+`--server-bin PATH`) on the selected loopback endpoint and shuts it down when the command exits.
+Manual endpoint mode remains available.
 
 ```sh
 ./build/dev/platypus
 ./build/dev/platypus run --headless --yes --project /path/to/repo --endpoint http://127.0.0.1:8080 "Fix the failing test"
+./build/dev/platypus run --managed-model ~/.local/share/platypus/models/ornith-1.0-9b-q4_k_m.gguf --profile profiles/ornith-1.0.toml "Fix the failing test"
 ./build/dev/platypus --profile profiles/ornith-1.0.toml
 ./build/dev/platypus --resume 1
 ./build/dev/platypus undo --project /path/to/repo

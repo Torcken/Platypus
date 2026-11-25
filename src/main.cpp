@@ -6,6 +6,7 @@
 #include "platform/hardware.hpp"
 #include "platform/model_catalog.hpp"
 #include "platform/model_download.hpp"
+#include "platform/server_manager.hpp"
 #include "tui/terminal.hpp"
 #include <algorithm>
 #include <cctype>
@@ -167,6 +168,8 @@ int main(int argc, char *argv[]) {
         int steps = 25;
         std::string profile_path;
         std::string backend_name = "llama_server", endpoint = "http://127.0.0.1:8080", task;
+        std::string server_executable = "llama-server";
+        std::filesystem::path managed_model;
         auto root = std::filesystem::current_path();
         for (int i = 1; i < argc; ++i) {
             std::string argument = argv[i];
@@ -182,7 +185,8 @@ int main(int argc, char *argv[]) {
                        "[--endpoint URL] [--max-steps N] instruction\n"
                        "       platypus undo [--yes] [--project DIR]\nWithout an instruction, "
                        "starts an interactive session. /undo restores the latest snapshot.\n"
-                       "       platypus models list|recommend|download MODEL_ID\n";
+                       "       platypus models list|recommend|download MODEL_ID\n"
+                       "       platypus run --managed-model FILE [--server-bin PATH] instruction\n";
                 return 0;
             }
             if (argument == "--version") {
@@ -205,6 +209,10 @@ int main(int argc, char *argv[]) {
                 root = next();
             else if (argument == "--endpoint")
                 endpoint = next();
+            else if (argument == "--managed-model")
+                managed_model = next();
+            else if (argument == "--server-bin")
+                server_executable = next();
             else if (argument == "--resume") {
                 resume = true;
                 if (i + 1 < argc &&
@@ -248,17 +256,44 @@ int main(int argc, char *argv[]) {
             std::cout << "Snapshot restored\n";
             return 0;
         }
-        auto backend = llm::LlmBackendFactory::create_backend(backend_name, endpoint);
-        if (!backend)
-            throw std::runtime_error("Unknown backend: " + backend_name);
+        std::optional<llm::ModelProfile> selected_profile;
         if (!profile_path.empty()) {
             auto profile = llm::ModelProfileManager::read_profile(profile_path);
             if (!profile.is_ok())
                 throw std::runtime_error(profile.error());
+            selected_profile = profile.value();
+        }
+        std::unique_ptr<platform::ServerManager> managed_server;
+        if (!managed_model.empty()) {
+            constexpr std::string_view prefix = "http://127.0.0.1:";
+            if (backend_name != "llama_server" || !endpoint.starts_with(prefix) ||
+                endpoint.find('/', prefix.size()) != std::string::npos)
+                throw std::runtime_error("Managed llama-server requires the llama_server backend "
+                                         "and a loopback endpoint");
+            const auto port_text = endpoint.substr(prefix.size());
+            std::size_t parsed = 0;
+            const auto port = std::stoul(port_text, &parsed);
+            if (parsed != port_text.size() || port == 0 || port > 65535)
+                throw std::runtime_error("Managed llama-server endpoint has an invalid port");
+            platform::ServerConfig server_config{server_executable, managed_model,
+                                                 static_cast<unsigned short>(port)};
+            if (selected_profile)
+                server_config.context_tokens =
+                    static_cast<std::size_t>(selected_profile->context_tokens);
+            managed_server = std::make_unique<platform::ServerManager>(std::move(server_config));
+            auto started = managed_server->start();
+            if (!started.is_ok())
+                throw std::runtime_error(started.error());
+            std::cerr << "Managed llama-server ready at " << managed_server->endpoint() << '\n';
+        }
+        auto backend = llm::LlmBackendFactory::create_backend(backend_name, endpoint);
+        if (!backend)
+            throw std::runtime_error("Unknown backend: " + backend_name);
+        if (selected_profile) {
             auto real = dynamic_cast<llm::LlamaServerBackend *>(backend.get());
             if (!real)
                 throw std::runtime_error("Profiles require the llama_server backend");
-            real->set_profile(profile.value());
+            real->set_profile(*selected_profile);
         }
         core::ExecutionEngine engine(std::move(backend), tools);
         auto remote_config = llm::load_remote_provider_config(tools->snapshots().root());

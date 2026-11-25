@@ -16,6 +16,13 @@ def fake_server(edit: dict[str, str] | None = None, responses: list[str] | None 
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *_args):
             pass
+        def do_GET(self):
+            if self.path == "/health":
+                self.send_response(200)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self.send_error(404)
         def do_POST(self):
             request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             if captured is not None:

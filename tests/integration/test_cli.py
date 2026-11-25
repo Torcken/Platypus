@@ -19,13 +19,21 @@ assert "ornith-1.0-9b-q4_k_m" in models.stdout
 assert "GiB" in models.stdout
 with tempfile.TemporaryDirectory(prefix="platypus-cli-") as temporary:
     root = Path(temporary)
+    model_file = root / "fixture.gguf"
+    model_file.write_bytes(b"fake-model")
+    server_bin = root / "fake-llama-server"
+    server_bin.write_text("#!/bin/sh\nexec python3 -c 'import time; time.sleep(60)'\n")
+    server_bin.chmod(0o755)
     calls = ['{"steps":["Write the requested file"]}',
              '{"tool_call":{"name":"write","arguments":{"path":"result.txt","content":"verified"}}}',
              "Done"]
     with fake_server(responses=calls) as endpoint:
         result = subprocess.run([binary, "run", "--headless", "--yes", "--project", temporary,
-                                 "--endpoint", endpoint, "Write a file"], capture_output=True, text=True, timeout=10)
+                                 "--endpoint", endpoint, "--managed-model", str(model_file),
+                                 "--server-bin", str(server_bin), "Write a file"],
+                                capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
+    assert "Managed llama-server ready" in result.stderr
     assert (root / "result.txt").read_text() == "verified"
     assert "Approved (--yes)" in result.stderr
     restored = subprocess.run([binary, "undo", "--yes", "--project", temporary], capture_output=True, text=True, timeout=10)
