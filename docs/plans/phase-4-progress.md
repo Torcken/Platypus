@@ -14,6 +14,9 @@
   no-overwrite finalization are implemented with offline transfer-seam tests. Setup and UI wiring
   remain.
 - [ ] Manage the pinned llama-server lifecycle, readiness, bounded OOM restart, and shutdown.
+  In progress: reproc-backed child ownership, loopback-only launch, bounded readiness polling,
+  explicit one-time OOM recovery by the caller, and guaranteed shutdown are implemented with fake
+  process and health probes. Runtime integration with model-load errors remains.
 - [ ] Add setup wizard, Linux installer, Homebrew formula, update command, and distribution docs.
 - [ ] Extend CI for the supported Linux/macOS release targets and supported backend builds.
 - [x] Run all local verification presets: dev, ASan, UBSan (9/9 CTest tests each) and Python (41 tests).

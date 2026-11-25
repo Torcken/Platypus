@@ -15,6 +15,7 @@
 #include "platform/model_catalog.hpp"
 #include "platform/model_download.hpp"
 #include "platform/process.hpp"
+#include "platform/server_manager.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <filesystem>
@@ -314,6 +315,43 @@ TEST_CASE("Model download rejects checksum mismatch without exposing artifact") 
     auto partial = destination;
     partial += ".part";
     REQUIRE_FALSE(fs::exists(partial));
+}
+TEST_CASE("Managed llama-server waits for health and bounds OOM restarts") {
+    struct FakeProcess final : platform::ServerProcess {
+        bool running = true;
+        bool is_running() override { return running; }
+        void stop() noexcept override { running = false; }
+    };
+    auto launches = std::make_shared<unsigned int>(0);
+    platform::ServerManager manager(
+        {"llama-server", "model.gguf", 8123, std::chrono::milliseconds(1000), 1},
+        [launches](const auto &) {
+            ++*launches;
+            std::shared_ptr<platform::ServerProcess> process = std::make_shared<FakeProcess>();
+            return util::Result<std::shared_ptr<platform::ServerProcess>>::ok(std::move(process));
+        },
+        [](const auto &endpoint) { return endpoint == "http://127.0.0.1:8123"; });
+    REQUIRE(manager.endpoint() == "http://127.0.0.1:8123");
+    REQUIRE(manager.start().is_ok());
+    REQUIRE(*launches == 1);
+    REQUIRE(manager.restart_after_out_of_memory().is_ok());
+    REQUIRE(*launches == 2);
+    REQUIRE_FALSE(manager.restart_after_out_of_memory().is_ok());
+    manager.stop();
+}
+TEST_CASE("Managed llama-server fails closed when the child exits before readiness") {
+    struct ExitedProcess final : platform::ServerProcess {
+        bool is_running() override { return false; }
+        void stop() noexcept override {}
+    };
+    platform::ServerManager manager(
+        {"llama-server", "model.gguf", 8124, std::chrono::milliseconds(1000), 1},
+        [](const auto &) {
+            std::shared_ptr<platform::ServerProcess> process = std::make_shared<ExitedProcess>();
+            return util::Result<std::shared_ptr<platform::ServerProcess>>::ok(std::move(process));
+        },
+        [](const auto &) { return false; });
+    REQUIRE_FALSE(manager.start().is_ok());
 }
 TEST_CASE("Engine uses approved remote calls for proposals and reviews only") {
     Workspace workspace;

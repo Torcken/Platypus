@@ -8,6 +8,7 @@ add_library(util STATIC
     ../platform/clipboard.cpp
     ../platform/hardware.cpp
     ../platform/model_download.cpp
+    ../platform/server_manager.cpp
     ../platform/model_catalog.cpp
 )
 
