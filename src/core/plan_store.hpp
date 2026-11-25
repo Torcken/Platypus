@@ -45,6 +45,10 @@ class PlanStore {
     util::Result<util::Void>
     import_file(const std::filesystem::path &relative_path,
                 const std::function<bool(const std::string &)> &confirm) const;
+    /// Import Markdown bullet comments as unchecked tasks in a selected milestone.
+    util::Result<std::vector<std::string>>
+    import_review_comments(const std::filesystem::path &relative_path, std::size_t milestone_index,
+                           const std::function<bool(const std::string &)> &confirm) const;
 
     static util::Result<ProjectPlan> parse(std::string_view markdown);
     static util::Result<std::string> render(const ProjectPlan &plan);

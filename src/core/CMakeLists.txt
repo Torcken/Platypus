@@ -10,6 +10,7 @@ add_library(core STATIC
     ../agent/repository_map.cpp
     plan_store.cpp
     plan_commands.cpp
+    review_store.cpp
     project_checks.cpp
     execution_engine.cpp
     ../session/store.cpp

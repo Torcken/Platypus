@@ -10,12 +10,14 @@
 - [x] `/review` emits a bounded diff/plan bundle for the latest milestone baseline.
 - [x] Persist latest-task check statuses in private `.platypus` metadata and include them in review
   bundles (ADR-021).
-- [ ] Capture review decisions, copy bundles to clipboard, and import review comments as new tasks.
+- [x] Record milestone decisions in private `.platypus` metadata and import approved Markdown
+  review bullets as unchecked tasks.
+- [ ] Copy review bundles to the clipboard.
 - [x] Detect CMake/Cargo/npm/Go/pytest checks, load `.platypus.toml` argv overrides, require
   approval, return untrusted failures to the model, and cap repair attempts at three (ADR-021).
 - [ ] Optional remote providers with estimate-before-send and fake transport tests.
-- [ ] One FakeBackend integration test for the complete plan → execute → check → review → comment
-  import cycle. Separate tests currently cover proposal, decisions, execution, checks, and storage.
+- [x] FakeBackend integration test covers the full offline plan → execute → check → review →
+  decision → comment-import cycle.
 - [x] Dev, ASan, and UBSan suites (9/9 each), benchmark tests (41/41), and formatter checks pass.
   Focused clang-tidy is not clean: it reports logger enum/stream, registry vector-growth,
   `SnapshotStore`/backend/engine stop-token, and TUI event-parameter suggestions.

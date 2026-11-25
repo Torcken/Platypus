@@ -5,6 +5,7 @@
 #include "core/plan_commands.hpp"
 #include "core/plan_store.hpp"
 #include "core/project_checks.hpp"
+#include "core/review_store.hpp"
 #include "llm/chat_formatter.hpp"
 #include "llm/fake_backend.hpp"
 #include "llm/tool_grammar.hpp"
@@ -200,6 +201,7 @@ TEST_CASE("Plan store creates milestones and tasks through validated updates") {
     REQUIRE(loaded.value()[0].tasks[0].complete);
     REQUIRE_FALSE(plans.add_task(1, "Invalid milestone").is_ok());
     REQUIRE_FALSE(plans.add_task(0, "two lines\nare rejected").is_ok());
+    REQUIRE_FALSE(plans.add_task(0, "terminal escape \x1b[31m").is_ok());
     auto batch = plans.add_tasks(0, {"First proposal step", "Second proposal step"});
     REQUIRE(batch.is_ok());
     REQUIRE(batch.value() == std::vector<std::string>{"TASK-0002", "TASK-0003"});
@@ -229,6 +231,51 @@ TEST_CASE("Plan file import previews and requires explicit approval") {
     REQUIRE_FALSE(plans.import_file("external.md", [](const auto &) { return true; }).is_ok());
     REQUIRE_FALSE(plans.import_file("../incoming.md", [](const auto &) { return true; }).is_ok());
 }
+TEST_CASE("Review comments import as fresh unchecked tasks after approval") {
+    Workspace workspace;
+    core::PlanStore plan(workspace.root);
+    REQUIRE(plan.save({{"Review", {}, {}}}).is_ok());
+    std::ofstream(workspace.root / "comments.md")
+        << "# Reviewer notes\n\n- Handle a missing configuration file\n2. Add a focused test\n";
+    std::string preview;
+    auto denied = plan.import_review_comments("comments.md", 0, [&](const auto &value) {
+        preview = value;
+        return false;
+    });
+    REQUIRE_FALSE(denied.is_ok());
+    REQUIRE(preview.find("Handle a missing configuration file") != std::string::npos);
+    REQUIRE(plan.load().value()[0].tasks.empty());
+    auto imported =
+        plan.import_review_comments("comments.md", 0, [](const auto &) { return true; });
+    REQUIRE(imported.is_ok());
+    REQUIRE(imported.value() == std::vector<std::string>{"TASK-0001", "TASK-0002"});
+    auto loaded = plan.load();
+    REQUIRE(loaded.is_ok());
+    REQUIRE(loaded.value()[0].tasks.size() == 2);
+    REQUIRE_FALSE(loaded.value()[0].tasks[0].complete);
+    REQUIRE(loaded.value()[0].tasks[1].description == "Add a focused test");
+}
+TEST_CASE("Review decisions are keyed by baseline and reject symlink files") {
+    Workspace workspace, outside;
+    core::ReviewStore reviews(workspace.root);
+    const std::string baseline(40, 'a');
+    REQUIRE(reviews.add_decision(baseline, "Keep compatibility with existing sessions").is_ok());
+    REQUIRE(reviews.add_decision(std::string(40, 'b'), "Run the migration first").is_ok());
+    auto decisions = reviews.decisions(baseline);
+    REQUIRE(decisions.is_ok());
+    REQUIRE(decisions.value() ==
+            std::vector<std::string>{"Keep compatibility with existing sessions"});
+    REQUIRE_FALSE(reviews.add_decision(baseline, "multiple\nlines").is_ok());
+    REQUIRE_FALSE(reviews.add_decision(baseline, "terminal escape \x1b[31m").is_ok());
+    std::ofstream(outside.root / "decisions.json") << "outside data";
+    fs::create_directories(workspace.root / ".platypus");
+    fs::remove(workspace.root / ".platypus/review-decisions.json");
+    fs::create_symlink(outside.root / "decisions.json",
+                       workspace.root / ".platypus/review-decisions.json");
+    REQUIRE_FALSE(
+        reviews.add_decision(std::string(40, 'c'), "Do not write through symlink").is_ok());
+    REQUIRE(read(outside.root / "decisions.json") == "outside data");
+}
 TEST_CASE("Interactive plan commands validate and confirm plan mutations") {
     Workspace workspace;
     std::size_t approvals = 0;
@@ -256,6 +303,59 @@ TEST_CASE("Interactive plan commands validate and confirm plan mutations") {
     REQUIRE(rendered->find("[x] TASK-0001") != std::string::npos);
     REQUIRE_FALSE(core::handle_plan_command("/task 0 invalid", store)->empty());
     REQUIRE_FALSE(core::handle_plan_command("do ordinary task", store).has_value());
+}
+TEST_CASE("FakeBackend completes the plan, checks, review, decision, and comment-import cycle") {
+    Workspace workspace;
+    std::size_t approvals = 0;
+    safety::SnapshotStore snapshots(workspace.root, [&](const auto &) {
+        ++approvals;
+        return true;
+    });
+    auto milestone = core::handle_plan_command("/milestone Offline cycle", snapshots);
+    REQUIRE(milestone->find("captured its review baseline") != std::string::npos);
+    std::ofstream(workspace.root / ".platypus.toml") << R"toml([checks]
+commands = [{name="unit", argv=["python3", "-c", "print('unit check passed')"]}]
+)toml";
+    std::ofstream(workspace.root / "implementation.cpp") << "int value = 1;\n";
+    auto decision = core::handle_plan_command("/decision Keep the public API stable", snapshots);
+    REQUIRE(decision->find("Recorded milestone decision") != std::string::npos);
+    auto invalid_decision = core::handle_plan_command("/decision unsafe \x1b[31m", snapshots);
+    REQUIRE(invalid_decision->find("single-line") != std::string::npos);
+    REQUIRE(approvals == 2);
+
+    auto backend = std::make_shared<llm::FakeBackend>();
+    backend->set_script("workflow-cycle",
+                        {R"({"steps":["Implement the requested change"]})", "Change complete"});
+    auto registry = std::make_shared<core::ToolRegistry>(workspace.root, [&](const auto &) {
+        ++approvals;
+        return true;
+    });
+    core::register_default_tools(*registry);
+    core::ExecutionEngine engine(backend, registry);
+    auto execution = engine.run_planned(
+        "workflow-cycle",
+        [](const auto &proposal) -> std::optional<std::vector<std::string>> { return proposal; });
+    REQUIRE(execution.is_ok());
+    REQUIRE(approvals == 3);
+
+    auto review = core::handle_plan_command("/review", snapshots);
+    REQUIRE(review.has_value());
+    REQUIRE(review->find("implementation.cpp") != std::string::npos);
+    REQUIRE(review->find("\"unit\": passed (exit 0)") != std::string::npos);
+    REQUIRE(review->find("Keep the public API stable") != std::string::npos);
+
+    std::ofstream(workspace.root / "review-comments.md")
+        << "# Follow-up\n- Cover a missing configuration\n- Add a regression test\n";
+    auto imported = core::handle_plan_command("/review-import review-comments.md", snapshots);
+    REQUIRE(imported.has_value());
+    REQUIRE(imported->find("TASK-0002") != std::string::npos);
+    REQUIRE(imported->find("TASK-0003") != std::string::npos);
+    auto plan = core::PlanStore(workspace.root).load();
+    REQUIRE(plan.is_ok());
+    REQUIRE(plan.value()[0].tasks.size() == 3);
+    REQUIRE(plan.value()[0].tasks[0].complete);
+    REQUIRE_FALSE(plan.value()[0].tasks[1].complete);
+    REQUIRE(approvals == 4);
 }
 TEST_CASE("Plan storage rejects symlink destinations") {
     Workspace workspace, outside;

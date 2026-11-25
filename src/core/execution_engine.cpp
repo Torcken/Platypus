@@ -11,7 +11,12 @@
 namespace platypus::core {
 namespace {
 constexpr std::size_t kMaxProposalPlanBytes = std::size_t{16} * 1024;
+
+bool contains_control(const std::string &text) {
+    return std::any_of(text.begin(), text.end(),
+                       [](unsigned char c) { return c < 0x20 || c == 0x7f; });
 }
+} // namespace
 
 ExecutionEngine::ExecutionEngine(std::shared_ptr<llm::LlmBackend> backend,
                                  std::shared_ptr<ToolRegistry> registry, size_t max_history)
@@ -91,9 +96,7 @@ util::Result<std::vector<std::string>> ExecutionEngine::propose_plan(const std::
         if (!step.is_string())
             return Return::fail("Plan proposal steps must be strings");
         auto description = step.get<std::string>();
-        if (description.empty() || description.size() > 240 ||
-            description.find_first_of("\r\n") != std::string::npos ||
-            description.find('\0') != std::string::npos)
+        if (description.empty() || description.size() > 240 || contains_control(description))
             return Return::fail("Plan proposal contains an invalid step");
         steps.push_back(std::move(description));
     }
@@ -119,8 +122,7 @@ util::Result<std::string> ExecutionEngine::run_planned(const std::string &query,
     if (approved->empty() || approved->size() > 12)
         return Return::fail("Approved plan must contain between 1 and 12 steps");
     for (const auto &step : *approved)
-        if (step.empty() || step.size() > 240 || step.find_first_of("\r\n") != std::string::npos ||
-            step.find('\0') != std::string::npos)
+        if (step.empty() || step.size() > 240 || contains_control(step))
             return Return::fail("Approved plan contains an invalid step");
     if (stop.stop_requested())
         return Return::fail("Cancelled");

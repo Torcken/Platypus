@@ -2,6 +2,8 @@
 #include "plan_commands.hpp"
 #include "plan_store.hpp"
 #include "project_checks.hpp"
+#include "review_store.hpp"
+#include <algorithm>
 #include <charconv>
 #include <cstddef>
 #include <iomanip>
@@ -18,6 +20,15 @@ std::optional<std::string> after_prefix(const std::string &input, std::string_vi
 }
 
 std::string failure(const std::string &message) { return "Plan: " + message + "\n"; }
+
+bool contains_control(const std::string &text) {
+    return std::any_of(text.begin(), text.end(),
+                       [](unsigned char c) { return c < 0x20 || c == 0x7f; });
+}
+
+bool valid_decision_text(const std::string &text) {
+    return !text.empty() && text.size() <= 1024 && !contains_control(text);
+}
 } // namespace
 
 std::optional<std::string> handle_plan_command(const std::string &input,
@@ -79,6 +90,37 @@ std::optional<std::string> handle_plan_command(const std::string &input,
             *path, [&](const auto &preview) { return workspace.confirm(preview); });
         return result.is_ok() ? "Imported plan tasks into PLAN.md\n" : failure(result.error());
     }
+    if (auto decision = after_prefix(input, "/decision ")) {
+        if (!valid_decision_text(*decision))
+            return failure("decision must be a non-empty, single-line value up to 1024 bytes");
+        auto loaded = plan.load();
+        if (!loaded.is_ok())
+            return failure(loaded.error());
+        if (loaded.value().empty() || loaded.value().back().baseline_snapshot.empty())
+            return failure("create a milestone with a review baseline before recording decisions");
+        if (!workspace.confirm("Record this milestone decision?\n- " + *decision))
+            return "Decision recording declined.\n";
+        ReviewStore reviews(workspace.root());
+        auto result = reviews.add_decision(loaded.value().back().baseline_snapshot, *decision);
+        return result.is_ok() ? "Recorded milestone decision.\n" : failure(result.error());
+    }
+    if (auto path = after_prefix(input, "/review-import ")) {
+        auto loaded = plan.load();
+        if (!loaded.is_ok())
+            return failure(loaded.error());
+        if (loaded.value().empty())
+            return failure("create a milestone before importing review comments");
+        auto result =
+            plan.import_review_comments(*path, loaded.value().size() - 1, [&](const auto &preview) {
+                return workspace.confirm(preview);
+            });
+        if (!result.is_ok())
+            return failure(result.error());
+        std::string response = "Imported review comments as plan tasks:\n";
+        for (const auto &id : result.value())
+            response += "- " + id + "\n";
+        return response;
+    }
     if (input == "/review" || input.starts_with("/review ")) {
         auto loaded = plan.load();
         if (!loaded.is_ok())
@@ -129,7 +171,17 @@ std::optional<std::string> handle_plan_command(const std::string &input,
                 bundle += "\n";
             }
         }
-        bundle += "\n## Decisions\n\nNo milestone decisions are recorded yet.\n";
+        bundle += "\n## Decisions\n\n";
+        ReviewStore reviews(workspace.root());
+        auto decisions = reviews.decisions(milestone.baseline_snapshot);
+        if (!decisions.is_ok()) {
+            bundle += "Decisions unavailable: " + decisions.error() + "\n";
+        } else if (decisions.value().empty()) {
+            bundle += "No milestone decisions are recorded yet.\n";
+        } else {
+            for (const auto &decision : decisions.value())
+                bundle += "- " + decision + "\n";
+        }
         if (bundle.size() > kMaxReviewBytes) {
             bundle.resize(kMaxReviewBytes - 32);
             auto last_line = bundle.find_last_of('\n');
@@ -165,8 +217,7 @@ parse_plan_decision(const std::string &input, const std::vector<std::string> &pr
     while (true) {
         auto separator = remaining.find('|');
         auto step = trim(std::string(remaining.substr(0, separator)));
-        if (step.empty() || step.size() > 240 || step.find_first_of("\r\n") != std::string::npos ||
-            step.find('\0') != std::string::npos)
+        if (step.empty() || step.size() > 240 || contains_control(step))
             return Return::fail("Edited steps must be non-empty and at most 240 characters");
         edited.push_back(std::move(step));
         if (edited.size() > 12)

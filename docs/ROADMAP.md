@@ -7,9 +7,9 @@ Each phase has an **exit criterion**. Criteria marked *(human)* need real models
 human measures them with the benchmark. Your job for those is the tooling and a written test
 protocol in the phase report.
 
-Status audited 2026-11-25: phase 3 plan-first execution is implemented; the full offline workflow
-cycle and phases 4–5 remain. No whole-phase human exit criterion is satisfied yet. Unchecked
-compound items can contain working components;
+Status audited 2026-11-25: the Phase 3 offline plan-to-review/import cycle passes. Clipboard support,
+optional remote providers, and phases 4–5 remain. No whole-phase human exit criterion is satisfied
+yet. Unchecked compound items can contain working components;
 the progress records identify their remaining requirements.
 
 Phase 1 is split into sub-phases (1a–1d) because it does not fit in one session. Treat each

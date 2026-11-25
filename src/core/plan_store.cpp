@@ -21,7 +21,8 @@ constexpr std::string_view kHeader = "# Platypus Plan";
 
 bool valid_text(const std::string &text) {
     return !text.empty() && text.size() <= kMaxTextBytes &&
-           text.find_first_of("\r\n") == std::string::npos && text.find('\0') == std::string::npos;
+           std::none_of(text.begin(), text.end(),
+                        [](unsigned char c) { return c < 0x20 || c == 0x7f; });
 }
 
 bool valid_task_id(const std::string &id) {
@@ -405,6 +406,87 @@ PlanStore::import_file(const std::filesystem::path &relative_path,
     return merge_import(markdown);
 } catch (const std::exception &error) {
     return util::Result<util::Void>::fail("Cannot import plan file: " + std::string(error.what()));
+}
+
+util::Result<std::vector<std::string>> PlanStore::import_review_comments(
+    const std::filesystem::path &relative_path, std::size_t milestone_index,
+    const std::function<bool(const std::string &)> &confirm) const try {
+    using Return = util::Result<std::vector<std::string>>;
+    constexpr std::size_t max_comment_file_bytes = std::size_t{16} * 1024;
+    if (relative_path.empty() || relative_path.is_absolute())
+        return Return::fail("Review-comment path must be project-relative");
+    auto root = std::filesystem::canonical(root_);
+    auto source = root;
+    for (const auto &part : relative_path) {
+        if (part == "." || part == "..")
+            return Return::fail("Review-comment path cannot contain dot segments");
+        source /= part;
+        std::error_code status_error;
+        auto status = std::filesystem::symlink_status(source, status_error);
+        if (status_error || std::filesystem::is_symlink(status))
+            return Return::fail(
+                "Review-comment path contains a missing or symbolic link component");
+    }
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(source, error) || error)
+        return Return::fail("Review comments must come from a regular project file");
+    auto size = std::filesystem::file_size(source, error);
+    if (error || size > max_comment_file_bytes)
+        return Return::fail("Review-comment file is unreadable or exceeds 16 KiB");
+    std::ifstream input(source, std::ios::binary);
+    if (!input)
+        return Return::fail("Cannot open review-comment file");
+    std::string contents(static_cast<std::size_t>(size), '\0');
+    input.read(contents.data(), static_cast<std::streamsize>(contents.size()));
+    if (input.gcount() != static_cast<std::streamsize>(contents.size()))
+        return Return::fail("Review-comment file changed while being read");
+
+    std::vector<std::string> comments;
+    std::istringstream lines(contents);
+    std::string line;
+    while (std::getline(lines, line)) {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        auto first = line.find_first_not_of(" \t");
+        if (first == std::string::npos || line[first] == '#')
+            continue;
+        auto text = line.substr(first);
+        if (text.starts_with("- ") || text.starts_with("* "))
+            text.erase(0, 2);
+        else {
+            auto dot = text.find(". ");
+            bool numbered =
+                dot != std::string::npos && dot > 0 &&
+                std::all_of(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(dot),
+                            [](char c) { return c >= '0' && c <= '9'; });
+            if (numbered)
+                text.erase(0, dot + 2);
+            else
+                return Return::fail("Review comments must be one Markdown bullet per line");
+        }
+        auto last = text.find_last_not_of(" \t");
+        if (last == std::string::npos)
+            return Return::fail("Review comments cannot be empty");
+        text.resize(last + 1);
+        if (!valid_text(text))
+            return Return::fail("Review comment must contain at most 500 single-line characters");
+        comments.push_back(std::move(text));
+        if (comments.size() > 12)
+            return Return::fail("At most 12 review comments can be imported at once");
+    }
+    if (comments.empty())
+        return Return::fail("Review-comment file contains no Markdown bullet comments");
+    if (!confirm)
+        return Return::fail("Review-comment import requires explicit user approval");
+    std::string preview = "Import these review comments as plan tasks?\n";
+    for (const auto &comment : comments)
+        preview += "- [ ] " + comment + "\n";
+    if (!confirm(preview))
+        return Return::fail("Review-comment import declined");
+    return add_tasks(milestone_index, comments);
+} catch (const std::exception &error) {
+    return util::Result<std::vector<std::string>>::fail("Cannot import review comments: " +
+                                                        std::string(error.what()));
 }
 
 util::Result<util::Void> PlanStore::merge_import(std::string_view markdown) const try {

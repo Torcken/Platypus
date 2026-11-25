@@ -45,11 +45,12 @@ or `--direct` for an explicit direct request. Headless planned runs require `--y
 
 The interactive plan commands manage a validated, project-local `PLAN.md`: `/plan` shows it,
 `/milestone <title>` adds a milestone and captures a review baseline, `/task` adds a task,
-`/done TASK-0001` completes one, `/review` prints a bounded review
-bundle, and `/import <relative-markdown-file>` previews and asks before merging a plan. Import
-paths must stay inside the project and cannot traverse symlinks. Latest-task check statuses and
-exit codes appear in the review bundle. Capturing review decisions, copying bundles to the clipboard,
-and importing review comments as tasks are still being implemented.
+`/done TASK-0001` completes one, `/decision <text>` records a milestone decision, `/review` prints
+a bounded review bundle, `/import <relative-markdown-file>` previews a plan before merging, and
+`/review-import <relative-markdown-file>` previews Markdown bullets before adding them as unchecked
+tasks to the latest milestone. Import paths must stay inside the project and cannot traverse
+symlinks. Latest-task check statuses, exit codes, and milestone decisions appear in the bundle.
+Copying review bundles to the clipboard is still being implemented.
 
 Project checks run after the model finishes a task and require approval. Platypus detects CMake,
 Cargo, npm, Go, and configured pytest projects; `.platypus.toml` can replace detection with direct
