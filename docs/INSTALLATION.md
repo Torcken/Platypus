@@ -22,6 +22,12 @@ access to fetch the pinned llama.cpp source. `PLATYPUS_BUILD_JOBS` controls serv
 (default `2`).
 The installer does not download model files.
 
+On Apple silicon, use `scripts/install-macos.sh` from the checked-out repository. It uses the same
+prefix and build-directory overrides, builds Platypus and the pinned llama-server with Metal, and
+does not require root access. Install CMake 3.24+, Ninja, Xcode Command Line Tools, Git, and the
+project's Homebrew development dependencies first. Because the repository is private during
+development, contributors and beta testers need authorized GitHub access to clone it.
+
 After install, add `~/.local/bin` to `PATH`, then inspect available models and hardware-aware
 recommendations:
 
@@ -35,8 +41,8 @@ platypus models download ornith-1.0-9b-q4_k_m
 Setup runs a read-only `README.md` summary task against the downloaded model before opening the
 interactive session. If the sample task fails, it reports the failure and continues to the session.
 
-For other environments, build from source using the commands in the README. The macOS build is
-covered by CI, but a Homebrew formula and assisted-free macOS setup have not yet been validated.
+For other environments, build from source using the commands in the README. A Homebrew formula and
+assisted-free setup on real macOS hardware have not yet been validated.
 Launch the pinned llama-server manually as described in ADR-002. Five-machine installation
 acceptance, including AMD 6 GB, M1 16 GB, and Titan V hardware, is a human exit criterion and remains
 open.

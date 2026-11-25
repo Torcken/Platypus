@@ -42,13 +42,17 @@ jobs:
       - run: cmake --build --preset ${{ matrix.preset }}
       - run: ctest --preset ${{ matrix.preset }} --output-on-failure
       - run: python3 -m unittest discover -s bench/tests -v
-      - name: Build pinned Metal llama-server
+      - name: Install from source on macOS
         if: runner.os == 'macOS'
         run: |
-          PLATYPUS_INSTALL_PREFIX="$RUNNER_TEMP/platypus-metal" \
-            PLATYPUS_BUILD_DIR="$RUNNER_TEMP/platypus-metal-build" \
-            PLATYPUS_BUILD_JOBS=2 scripts/build-llama-server.sh
-          "$RUNNER_TEMP/platypus-metal/bin/llama-server" --version | grep 'commit 2d8a32502'
+          prefix="$RUNNER_TEMP/platypus-macos-install"
+          PLATYPUS_INSTALL_PREFIX="$prefix" \
+            PLATYPUS_BUILD_DIR="$RUNNER_TEMP/platypus-macos-build" \
+            PLATYPUS_BUILD_JOBS=2 scripts/install-macos.sh
+          "$prefix/bin/platypus" --version | grep -Fx '0.1.0'
+          "$prefix/bin/llama-server" --version | grep 'commit 2d8a32502'
+          PLATYPUS_MODEL_CATALOG="$prefix/share/platypus/profiles/catalog.json" \
+            "$prefix/bin/platypus" models list
       - name: Install and catalog smoke test
         run: |
           prefix="$RUNNER_TEMP/platypus-install"

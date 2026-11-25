@@ -32,8 +32,9 @@
 - [ ] Add setup wizard, Linux installer, Homebrew formula, update command, and distribution docs.
   In progress: `platypus models list`, `recommend`, and `download` use the validated catalog,
   detected host facts, and verified downloader; source-tree and install catalog lookup are wired.
-  A local Linux x86_64 source installer builds both Platypus and the pinned server; the installation
-  guide documents CPU/CUDA/Vulkan choices. `platypus setup` now
+  The Linux x86_64 installer has passed a local temporary-prefix build and install. A macOS arm64
+  installer is added and awaits the hosted macOS CI run; the installation guide documents both
+  paths. `platypus setup` now
   recommends, downloads and verifies the selected model, loads its profile, starts a managed server,
   and runs a read-only README summary task before the interactive session. A failed sample task is
   reported while setup still opens the session. Its full download/server/sample path still needs a
@@ -41,10 +42,11 @@
   The pinned-server build selects Metal, CUDA, Vulkan, or CPU from the build host by default;
   explicit backend overrides remain available. The canonical source URL is
   `https://github.com/Torcken/Platypus` and is recorded in CMake metadata and installation docs.
-  Authenticated SSH inspection found remote `main` contains only the initial README/LICENSE commit;
-  it has no tags or releases. This `phase-4` development branch remains local and unpushed. Homebrew
-  formula and updater therefore need a release workflow, a published version tag, and verified
-  release asset layout before they can be made installable.
+  Human decision: keep the repository private until Platypus is production grade. Authenticated SSH
+  inspection found remote `main` contains only the initial README/LICENSE commit, with no tags or
+  releases. This `phase-4` development branch remains local and unpushed. Public releases, Homebrew,
+  and the updater are deferred until the production release path is approved; private contributors
+  can install from an authorized source checkout.
   Assisted-free acceptance remains. A temporary-prefix Linux installer run built and installed both
   binaries; its
   smoke wrapper stopped because it compared llama-server's `1.0.0-dev` version label with Platypus's
