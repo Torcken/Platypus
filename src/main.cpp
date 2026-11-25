@@ -31,6 +31,7 @@ std::filesystem::path model_catalog_path() {
     return PLATYPUS_INSTALL_CATALOG_PATH;
 }
 
+/// Return the per-user location used for verified model files on each supported desktop OS.
 std::filesystem::path default_model_directory() {
     const auto *home = std::getenv("HOME");
     if (!home)
@@ -168,6 +169,8 @@ int models_command(int argc, char *argv[]) {
     return 0;
 }
 
+/// Recommend and download a model, then configure main() to start an interactive managed session.
+/// @return 0 after cancellation or successful setup, 1 on an operational error, 2 without a TTY.
 int setup_command(std::filesystem::path &model_path, std::string &profile_path) {
     using namespace platypus::platform;
     if (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO)) {
