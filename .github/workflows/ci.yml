@@ -10,7 +10,7 @@ jobs:
           - {os: ubuntu-24.04, compiler: clang, preset: dev}
           - {os: ubuntu-24.04, compiler: gcc, preset: asan}
           - {os: ubuntu-24.04, compiler: gcc, preset: ubsan}
-          - {os: macos-14, compiler: llvm, preset: dev}
+          - {os: macos-15, compiler: llvm, preset: dev}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +32,7 @@ jobs:
       - name: macOS toolchain
         if: runner.os == 'macOS'
         run: |
+          test "$(uname -m)" = arm64
           brew install llvm ninja curl sqlite openssl@3 ripgrep
           echo "CC=$(brew --prefix llvm)/bin/clang" >> "$GITHUB_ENV"
           echo "CXX=$(brew --prefix llvm)/bin/clang++" >> "$GITHUB_ENV"
