@@ -17,6 +17,7 @@ After install, add `~/.local/bin` to `PATH`, then inspect available models and h
 recommendations:
 
 ```sh
+platypus setup
 platypus models list
 platypus models recommend --preference balanced
 platypus models download ornith-1.0-9b-q4_k_m

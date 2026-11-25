@@ -17,6 +17,9 @@ models = subprocess.run([binary, "models", "list", "--catalog", str(catalog)],
 assert models.returncode == 0, models.stderr
 assert "ornith-1.0-9b-q4_k_m" in models.stdout
 assert "GiB" in models.stdout
+setup = subprocess.run([binary, "setup"], capture_output=True, text=True, timeout=10)
+assert setup.returncode == 2
+assert "requires an interactive terminal" in setup.stderr
 with tempfile.TemporaryDirectory(prefix="platypus-cli-") as temporary:
     root = Path(temporary)
     model_file = root / "fixture.gguf"

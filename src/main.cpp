@@ -157,6 +157,68 @@ int models_command(int argc, char *argv[]) {
     std::cout << "Verified model saved to " << downloaded.value().string() << '\n';
     return 0;
 }
+
+int setup_command(std::filesystem::path &model_path, std::string &profile_path) {
+    using namespace platypus::platform;
+    if (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO)) {
+        std::cerr << "platypus setup requires an interactive terminal\n";
+        return 2;
+    }
+    auto catalog = load_catalog(model_catalog_path());
+    if (!catalog.is_ok()) {
+        std::cerr << catalog.error() << '\n';
+        return 1;
+    }
+    auto hardware = detect_hardware();
+    if (!hardware.is_ok()) {
+        std::cerr << hardware.error() << '\n';
+        return 1;
+    }
+    auto recommendation = recommend_model(catalog.value(), hardware.value().catalog_facts(),
+                                          ModelPreference::balanced);
+    if (!recommendation.is_ok()) {
+        std::cerr << recommendation.error() << '\n';
+        return 1;
+    }
+    const auto &model = recommendation.value();
+    std::cout << "Recommended model: " << model.display_name << " ("
+              << model_size(model.size_hint_bytes) << ")\nDownload and configure it now? [Y/n] "
+              << std::flush;
+    std::string answer;
+    if (!std::getline(std::cin, answer))
+        return 1;
+    if (answer != "" && answer != "y" && answer != "Y" && answer != "yes") {
+        std::cout << "Setup cancelled. Use `platypus models list` to choose another model.\n";
+        return 0;
+    }
+    const auto *home = std::getenv("HOME");
+    if (!home) {
+        std::cerr << "HOME is not set; use `platypus models download` with an explicit path.\n";
+        return 1;
+    }
+    model_path =
+        std::filesystem::path(home) / ".local/share/platypus/models" / (model.id + ".gguf");
+    auto downloaded =
+        download_model(model, model_path, [&](std::uint64_t received, std::uint64_t total) {
+            const auto percent = total == 0 ? 0 : static_cast<int>(received * 100 / total);
+            std::cerr << "\rDownloading " << model.id << ": " << percent << "%" << std::flush;
+        });
+    std::cerr << '\n';
+    if (!downloaded.is_ok()) {
+        std::cerr << downloaded.error() << '\n';
+        return 1;
+    }
+    auto selected_profile = std::filesystem::path(model.profile);
+    if (!std::filesystem::is_regular_file(selected_profile))
+        selected_profile = model_catalog_path().parent_path() / selected_profile.filename();
+    if (!std::filesystem::is_regular_file(selected_profile)) {
+        std::cerr << "Cannot find model profile: " << model.profile << '\n';
+        return 1;
+    }
+    profile_path = selected_profile.string();
+    std::cout << "Model verified. Starting an interactive session; Ctrl-C exits.\n";
+    return 0;
+}
 } // namespace
 int main(int argc, char *argv[]) {
     using namespace platypus;
@@ -170,6 +232,13 @@ int main(int argc, char *argv[]) {
         std::string backend_name = "llama_server", endpoint = "http://127.0.0.1:8080", task;
         std::string server_executable = "llama-server";
         std::filesystem::path managed_model;
+        if (argc > 1 && std::string_view(argv[1]) == "setup") {
+            const int setup_result = setup_command(managed_model, profile_path);
+            if (setup_result != 0)
+                return setup_result;
+            if (managed_model.empty())
+                return 0;
+        }
         auto root = std::filesystem::current_path();
         for (int i = 1; i < argc; ++i) {
             std::string argument = argv[i];
@@ -185,6 +254,7 @@ int main(int argc, char *argv[]) {
                        "[--endpoint URL] [--max-steps N] instruction\n"
                        "       platypus undo [--yes] [--project DIR]\nWithout an instruction, "
                        "starts an interactive session. /undo restores the latest snapshot.\n"
+                       "       platypus setup  (interactive first-run setup)\n"
                        "       platypus models list|recommend|download MODEL_ID\n"
                        "       platypus run --managed-model FILE [--server-bin PATH] instruction\n";
                 return 0;
@@ -194,6 +264,8 @@ int main(int argc, char *argv[]) {
                 return 0;
             }
             if (argument == "run")
+                continue;
+            if (argument == "setup")
                 continue;
             if (argument == "undo") {
                 undo = true;

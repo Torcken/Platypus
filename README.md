@@ -32,6 +32,7 @@ Manual endpoint mode remains available.
 
 ```sh
 ./build/dev/platypus
+./build/dev/platypus setup
 ./build/dev/platypus run --headless --yes --project /path/to/repo --endpoint http://127.0.0.1:8080 "Fix the failing test"
 ./build/dev/platypus run --managed-model ~/.local/share/platypus/models/ornith-1.0-9b-q4_k_m.gguf --profile profiles/ornith-1.0.toml "Fix the failing test"
 ./build/dev/platypus --profile profiles/ornith-1.0.toml
@@ -41,6 +42,11 @@ Manual endpoint mode remains available.
 ./build/dev/platypus models recommend --preference balanced
 ./build/dev/platypus models download ornith-1.0-9b-q4_k_m
 ```
+
+`setup` is the interactive first-run path: it detects available hardware, recommends a catalog
+model, downloads and verifies it, loads its profile, and starts an interactive session with a
+managed loopback `llama-server`. It requires a terminal; use the `models` commands and `run`
+options directly for scripted or manual setup.
 
 An interactive terminal opens FTXUI; redirected input uses a line interface. Read/list/grep are
 read-only. Writes/edits and shell commands require explicit approval; `--yes` approves and logs

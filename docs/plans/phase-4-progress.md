@@ -23,9 +23,10 @@
 - [ ] Add setup wizard, Linux installer, Homebrew formula, update command, and distribution docs.
   In progress: `platypus models list`, `recommend`, and `download` use the validated catalog,
   detected host facts, and verified downloader; source-tree and install catalog lookup are wired.
-  A local Linux x86_64 source installer and installation guide are added. Interactive first-run
-  flow, automatic server startup, Homebrew formula, release updater, and assisted-free acceptance
-  remain.
+  A local Linux x86_64 source installer and installation guide are added. `platypus setup` now
+  recommends, downloads and verifies the selected model, loads its profile, and enters a managed
+  interactive session. Its full download/server path still needs a real-model installation test.
+  Homebrew formula, release updater, and assisted-free acceptance remain.
 - [ ] Extend CI for the supported Linux/macOS release targets and supported backend builds.
   Existing Linux GCC/Clang/sanitizer and macOS arm64 jobs now provision OpenSSL Crypto; an optional
   Vulkan-header Linux job and install/catalog smoke step were added. Hosted CI has not been
