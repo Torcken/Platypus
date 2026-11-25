@@ -4,6 +4,8 @@ A C++20 terminal coding agent for open-weight models served locally with llama-s
 The current milestone restores a working headless/terminal core and a measured benchmark pipeline.
 **The full roadmap and v1.0 are not complete.** See the phase records for verified scope and gaps.
 
+Source repository: [Torcken/Platypus](https://github.com/Torcken/Platypus).
+
 ## Build and test
 
 Requires CMake 3.24+, Ninja, a C++20 compiler with std::jthread, Python 3.11+, Git, libcurl,

@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
-project(platypus VERSION 0.1.0 LANGUAGES C CXX)
+project(platypus VERSION 0.1.0
+    DESCRIPTION "A C++20 terminal coding agent for locally served open-weight models"
+    HOMEPAGE_URL "https://github.com/Torcken/Platypus"
+    LANGUAGES C CXX)
 if(APPLE)
     enable_language(OBJCXX)
     set(CMAKE_OBJCXX_STANDARD 20)

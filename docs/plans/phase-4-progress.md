@@ -39,8 +39,12 @@
   reported while setup still opens the session. Its full download/server/sample path still needs a
   real-model installation test.
   The pinned-server build selects Metal, CUDA, Vulkan, or CPU from the build host by default;
-  explicit backend overrides remain available. Homebrew formula, release updater, and assisted-free
-  acceptance remain. A temporary-prefix Linux installer run built and installed both binaries; its
+  explicit backend overrides remain available. The canonical source URL is
+  `https://github.com/Torcken/Platypus` and is recorded in CMake metadata and installation docs.
+  Anonymous remote reads request GitHub authentication here, so tags and release assets are not yet
+  verified; Homebrew formula and release updater still need a verified tag and release asset layout.
+  Assisted-free acceptance remains. A temporary-prefix Linux installer run built and installed both
+  binaries; its
   smoke wrapper stopped because it compared llama-server's `1.0.0-dev` version label with Platypus's
   `0.1.0`. Direct CLI checks pass: `platypus --version` prints `0.1.0`, and `platypus models list`
   lists all five catalog entries. The CI install/catalog assertions also pass locally against a

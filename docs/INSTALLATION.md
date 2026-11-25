@@ -1,9 +1,12 @@
 # Installation
 
 Platypus v1.0 targets Linux x86_64 and macOS arm64. Windows is not a supported v1.0 target.
-The Linux source installer builds into `~/.local` and needs no root access:
+Clone the source from [Torcken/Platypus](https://github.com/Torcken/Platypus). The Linux source
+installer builds into `~/.local` and needs no root access:
 
 ```sh
+git clone https://github.com/Torcken/Platypus.git
+cd Platypus
 ./scripts/install-linux.sh
 ```
 
