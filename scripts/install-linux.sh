@@ -10,7 +10,7 @@ source_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 prefix="${PLATYPUS_INSTALL_PREFIX:-${HOME}/.local}"
 build_dir="${PLATYPUS_BUILD_DIR:-${source_dir}/build/install}"
 
-for command in cmake ninja c++; do
+for command in cmake ninja c++ git; do
   if ! command -v "${command}" >/dev/null 2>&1; then
     echo "Missing build dependency: ${command}" >&2
     exit 1
@@ -22,4 +22,5 @@ cmake -S "${source_dir}" -B "${build_dir}" -G Ninja \
   -DCMAKE_INSTALL_PREFIX="${prefix}"
 cmake --build "${build_dir}" --parallel
 cmake --install "${build_dir}"
+"${source_dir}/scripts/build-llama-server.sh"
 echo "Installed Platypus to ${prefix}/bin/platypus"

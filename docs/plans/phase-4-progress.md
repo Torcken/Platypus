@@ -18,12 +18,15 @@
   In progress: reproc-backed child ownership, loopback-only launch, bounded readiness polling,
   explicit bounded OOM recovery by the caller (each restart halves context to a configured floor),
   and guaranteed shutdown are implemented with fake process and health probes. `run
-  --managed-model` now integrates process start/readiness/shutdown into CLI runs; the caller still
-  must classify model-load errors, and bundled pinned llama-server remains.
+  --managed-model` integrates process start/readiness/shutdown into CLI runs. A source build script
+  now builds and installs the ADR-002-pinned CPU server, with opt-in CUDA/Vulkan configuration; its
+  Linux CPU binary was built and version-checked locally. The caller still must classify model-load
+  errors, GPU server builds and hosted CI remain unverified.
 - [ ] Add setup wizard, Linux installer, Homebrew formula, update command, and distribution docs.
   In progress: `platypus models list`, `recommend`, and `download` use the validated catalog,
   detected host facts, and verified downloader; source-tree and install catalog lookup are wired.
-  A local Linux x86_64 source installer and installation guide are added. `platypus setup` now
+  A local Linux x86_64 source installer builds both Platypus and the pinned server; the installation
+  guide documents CPU/CUDA/Vulkan choices. `platypus setup` now
   recommends, downloads and verifies the selected model, loads its profile, and enters a managed
   interactive session. Its full download/server path still needs a real-model installation test.
   Homebrew formula, release updater, and assisted-free acceptance remain.

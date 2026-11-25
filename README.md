@@ -23,7 +23,8 @@ need network access; cached builds and fixture tests run without external servic
 
 ## Run locally
 
-Start your llama-server separately, using the release pinned in ADR-002. Model commands read the
+The Linux installer builds the llama-server revision pinned in ADR-002. For a direct development
+build, provide that server separately or pass `--server-bin PATH`. Model commands read the
 versioned catalog in `profiles/catalog.json`; set `PLATYPUS_MODEL_CATALOG` to use another catalog.
 Downloads go to `~/.local/share/platypus/models/` by default and are size and SHA-256 verified
 before finalization. `--managed-model FILE` starts `llama-server` from `PATH` (override with
