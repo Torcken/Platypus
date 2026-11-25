@@ -9,6 +9,10 @@
   DRM VRAM fallback, deterministic primary-GPU choice, and GPU-absent tests are implemented. NVML,
   native macOS Metal/unified-memory reporting, and supported-host hardware validation remain.
 - [ ] Implement resumable, bounded HTTPS downloads with progress and SHA-256 checks.
+  In progress: catalog-only Hugging Face HTTPS URLs, size cap, resumable `.part` files, HTTPS-only
+  redirects, progress and cancellation callbacks, OpenSSL SHA-256 verification, and atomic
+  no-overwrite finalization are implemented with offline transfer-seam tests. Setup and UI wiring
+  remain.
 - [ ] Manage the pinned llama-server lifecycle, readiness, bounded OOM restart, and shutdown.
 - [ ] Add setup wizard, Linux installer, Homebrew formula, update command, and distribution docs.
 - [ ] Extend CI for the supported Linux/macOS release targets and supported backend builds.

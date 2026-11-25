@@ -13,6 +13,7 @@
 #include "platform/clipboard.hpp"
 #include "platform/hardware.hpp"
 #include "platform/model_catalog.hpp"
+#include "platform/model_download.hpp"
 #include "platform/process.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -236,6 +237,83 @@ TEST_CASE("Hardware detection remains usable without a GPU driver") {
     auto selected = platform::select_primary_gpu(devices);
     REQUIRE(selected.has_value());
     REQUIRE(selected->name == "Large GPU");
+}
+TEST_CASE("Model download resumes a partial file and verifies before finalizing") {
+    Workspace workspace;
+    platform::ModelVariant model{"fixture",
+                                 "Fixture model",
+                                 "Q4",
+                                 "https://huggingface.co/test/model/resolve/"
+                                 "0123456789abcdef0123456789abcdef01234567/model.gguf",
+                                 "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+                                 3,
+                                 1,
+                                 0,
+                                 "profiles/test.toml",
+                                 1,
+                                 1,
+                                 1};
+    const auto destination = workspace.root / "models" / "model.gguf";
+    auto partial = destination;
+    partial += ".part";
+    fs::create_directories(destination.parent_path());
+    {
+        std::ofstream output(partial, std::ios::binary);
+        output << 'a';
+    }
+    std::uint64_t observed_offset = 0;
+    std::uint64_t observed_progress = 0;
+    auto transfer = [&](const std::string &, const fs::path &path, std::uint64_t offset,
+                        std::uint64_t maximum, const platform::DownloadProgress &progress,
+                        std::stop_token) {
+        observed_offset = offset;
+        REQUIRE(maximum == 3);
+        std::ofstream output(path, std::ios::binary | std::ios::app);
+        output << "bc";
+        output.close();
+        if (progress)
+            progress(3, 3);
+        observed_progress = 3;
+        return util::Result<std::uint64_t>::ok(3);
+    };
+    auto result = platform::download_model(
+        model, destination, [&](auto received, auto) { observed_progress = received; }, {},
+        transfer);
+    REQUIRE(result.is_ok());
+    REQUIRE(observed_offset == 1);
+    REQUIRE(observed_progress == 3);
+    REQUIRE(fs::exists(destination));
+    REQUIRE(read(destination) == "abc");
+    REQUIRE_FALSE(fs::exists(partial));
+}
+TEST_CASE("Model download rejects checksum mismatch without exposing artifact") {
+    Workspace workspace;
+    platform::ModelVariant model{"fixture",
+                                 "Fixture model",
+                                 "Q4",
+                                 "https://huggingface.co/test/model/resolve/"
+                                 "0123456789abcdef0123456789abcdef01234567/model.gguf",
+                                 std::string(64, '0'),
+                                 3,
+                                 1,
+                                 0,
+                                 "profiles/test.toml",
+                                 1,
+                                 1,
+                                 1};
+    const auto destination = workspace.root / "model.gguf";
+    auto transfer = [](const std::string &, const fs::path &path, std::uint64_t, std::uint64_t,
+                       const platform::DownloadProgress &, std::stop_token) {
+        std::ofstream output(path, std::ios::binary);
+        output << "bad";
+        return util::Result<std::uint64_t>::ok(3);
+    };
+    auto result = platform::download_model(model, destination, {}, {}, transfer);
+    REQUIRE_FALSE(result.is_ok());
+    REQUIRE_FALSE(fs::exists(destination));
+    auto partial = destination;
+    partial += ".part";
+    REQUIRE_FALSE(fs::exists(partial));
 }
 TEST_CASE("Engine uses approved remote calls for proposals and reviews only") {
     Workspace workspace;
