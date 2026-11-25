@@ -2,8 +2,10 @@
 #define PLATYPUS_LLM_LLAMA_SERVER_BACKEND_HPP
 
 #include "backend.hpp"
+#include <functional>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace platypus::llm {
@@ -13,6 +15,7 @@ namespace platypus::llm {
  */
 class LlamaServerBackend : public LlmBackend {
   public:
+    using RuntimeOomRecovery = std::function<util::Result<bool>(std::string_view request_error)>;
     /**
      * @param base_url The base URL of the llama.cpp server (e.g., "http://localhost:8080").
      */
@@ -35,6 +38,10 @@ class LlamaServerBackend : public LlmBackend {
                 int max_tokens, std::function<void(const ChatChunk &)> callback) override;
 
     void set_profile(ModelProfile profile) { profile_ = std::move(profile); }
+    /// Install managed-server recovery; manual endpoints remain unmanaged.
+    void set_runtime_oom_recovery(RuntimeOomRecovery recovery) {
+        runtime_oom_recovery_ = std::move(recovery);
+    }
     const ModelProfile *profile() const override { return profile_ ? &*profile_ : nullptr; }
     /// Checks readiness using the pinned server health endpoint.
     util::Result<std::string> health();
@@ -48,6 +55,7 @@ class LlamaServerBackend : public LlmBackend {
     std::string previous_stable_prefix_;
     bool benchmark_metadata_enabled_ = false;
     std::string benchmark_metadata_;
+    RuntimeOomRecovery runtime_oom_recovery_;
 
     void diagnose_prefix(const std::vector<std::pair<std::string, std::string>> &messages);
 

@@ -8,6 +8,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 
 namespace platypus::platform {
 
@@ -45,6 +46,8 @@ class ServerManager {
 
     util::Result<util::Void> start();
     util::Result<util::Void> restart_after_out_of_memory();
+    /// Restart at a reduced context only when the request or child diagnostics identify an OOM.
+    util::Result<bool> recover_runtime_out_of_memory(std::string_view request_error);
     void stop() noexcept;
     std::string endpoint() const;
 

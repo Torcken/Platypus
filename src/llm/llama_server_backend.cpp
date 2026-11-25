@@ -149,7 +149,27 @@ util::Result<CompletionResult> LlamaServerBackend::complete(const CompletionRequ
         if (benchmark_metadata_.size() > 48 * 1024)
             return util::Result<CompletionResult>::fail("Benchmark metadata exceeds header limit");
     }
-    auto result = LlmBackend::complete(completion, std::move(on_token), stop);
+    bool emitted_tokens = false;
+    auto complete_once = [&] {
+        TokenCallback tracked_callback;
+        if (on_token) {
+            tracked_callback = [&](const std::string &chunk) {
+                emitted_tokens = emitted_tokens || !chunk.empty();
+                on_token(chunk);
+            };
+        }
+        return LlmBackend::complete(completion, std::move(tracked_callback), stop);
+    };
+    auto result = complete_once();
+    if (!result.is_ok() && !emitted_tokens && runtime_oom_recovery_) {
+        auto recovery = runtime_oom_recovery_(result.error());
+        if (!recovery.is_ok()) {
+            result = util::Result<CompletionResult>::fail("Inference OOM recovery failed: " +
+                                                          recovery.error());
+        } else if (recovery.value()) {
+            result = complete_once();
+        }
+    }
     benchmark_metadata_.clear();
     return result;
 } catch (const std::exception &error) {

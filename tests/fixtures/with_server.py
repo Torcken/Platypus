@@ -6,6 +6,9 @@ import subprocess
 import sys
 import threading
 
+runtime_oom_requests = {}
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -19,6 +22,52 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        user_text = next(
+            (
+                message.get("content")
+                for message in request.get("messages", [])
+                if message.get("role") == "user"
+            ),
+            None,
+        )
+        if user_text in {"Runtime OOM retry", "Runtime OOM partial"}:
+            runtime_oom_requests[user_text] = runtime_oom_requests.get(user_text, 0) + 1
+            if runtime_oom_requests[user_text] == 1:
+                if user_text == "Runtime OOM partial":
+                    body = (
+                        'data: {"choices":[{"delta":{"content":"partial"},'
+                        '"finish_reason":null}]}\n\n'
+                    )
+                    content_type = "text/event-stream"
+                else:
+                    body = json.dumps({"error": "CUDA error: out of memory"})
+                    content_type = "application/json"
+                data = body.encode()
+                self.send_response(500)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            body = (
+                "data: "
+                + json.dumps(
+                    {"choices": [{"delta": {"content": "recovered"}, "finish_reason": "stop"}]}
+                )
+                + "\n\ndata: [DONE]\n\n"
+                if request.get("stream")
+                else json.dumps({"choices": [{"message": {"content": "recovered"}}]})
+            )
+            data = body.encode()
+            self.send_response(200)
+            self.send_header(
+                "Content-Type",
+                "text/event-stream" if request.get("stream") else "application/json",
+            )
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         if self.path == "/tokenize":
             body = json.dumps({"tokens": [1, 2, 3]})
             content_type = "application/json"

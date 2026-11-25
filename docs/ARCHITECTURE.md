@@ -9,6 +9,9 @@ flowchart LR
     UI[FTXUI terminal] --> E
     E --> B[llm::LlmBackend::complete]
     B --> HTTP[libcurl / llama-server]
+    B -. managed OOM recovery .-> SM[platform::ServerManager]
+    CLI --> SM
+    SM --> HTTP
     B --> Fake[FakeBackend fixtures]
     E --> C[agent::ContextManager / budget and append-only turns]
     C --> B
@@ -41,6 +44,12 @@ cancellation kills descendants. Shell commands remain intentionally powerful aft
 Session turns append to SQLite with database triggers prohibiting updates/deletes. Resume loads
 them in order without duplicating records. The terminal runs generation on one joined worker,
 wakes the UI with PostEvent, and waits on a cancellable condition variable for approvals.
+
+First-run setup downloads and verifies a catalog model, starts the pinned server on loopback, waits
+for health, then runs a read-only README summary task before opening the terminal. Managed inference
+OOMs are classified from the failed HTTP response or bounded child diagnostics. The server restarts
+at reduced context within its configured limit; generation retries only if no response token was
+already emitted. Manual endpoints do not use managed recovery.
 
 Start reading `src/main.cpp`, then `src/core/execution_engine.cpp`,
 `src/agent/context_manager.cpp`, `src/tools/builtins.cpp`, `src/tools/tool.cpp`, and

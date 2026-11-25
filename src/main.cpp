@@ -379,11 +379,20 @@ int main(int argc, char *argv[]) {
         auto backend = llm::LlmBackendFactory::create_backend(backend_name, endpoint);
         if (!backend)
             throw std::runtime_error("Unknown backend: " + backend_name);
-        if (selected_profile) {
+        if (selected_profile || managed_server) {
             auto real = dynamic_cast<llm::LlamaServerBackend *>(backend.get());
-            if (!real)
+            if (!real && selected_profile)
                 throw std::runtime_error("Profiles require the llama_server backend");
-            real->set_profile(*selected_profile);
+            if (!real)
+                throw std::runtime_error("Managed llama-server requires the llama_server backend");
+            if (managed_server) {
+                auto *server = managed_server.get();
+                real->set_runtime_oom_recovery([server](std::string_view request_error) {
+                    return server->recover_runtime_out_of_memory(request_error);
+                });
+            }
+            if (selected_profile)
+                real->set_profile(*selected_profile);
         }
         core::ExecutionEngine engine(std::move(backend), tools);
         auto remote_config = llm::load_remote_provider_config(tools->snapshots().root());

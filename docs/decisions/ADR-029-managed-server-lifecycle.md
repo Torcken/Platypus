@@ -15,5 +15,6 @@ tests.
 
 ## Consequences
 
-The lifecycle service does not infer OOM from arbitrary server output; the generation/setup caller
-must classify a model-load failure and request recovery. Manual endpoint mode remains available.
+Startup recovery classifies only known allocation diagnostics. Runtime inference recovery uses the
+bounded response/diagnostic classification and no-replay rule in ADR-033. Manual endpoint mode
+remains available and does not receive a recovery callback.

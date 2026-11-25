@@ -75,6 +75,29 @@ void test_llama_server_backend() {
     assert(calls.at(0).at("function").at("name") == "read_file");
     assert(calls.at(1).at("function").at("name") == "list_files");
     assert(streamed_payload.find("Explanation") != std::string::npos);
+
+    LlamaServerBackend recovering_backend(endpoint);
+    int recovery_attempts = 0;
+    recovering_backend.set_runtime_oom_recovery([&](std::string_view error) {
+        assert(error.find("out of memory") != std::string_view::npos);
+        ++recovery_attempts;
+        return platypus::util::Result<bool>::ok(true);
+    });
+    CompletionRequest runtime_oom_request;
+    runtime_oom_request.messages = {{"user", "Runtime OOM retry"}};
+    auto recovered = recovering_backend.complete(runtime_oom_request, {}, {});
+    assert(recovered.is_ok());
+    assert(recovered.value().content == "recovered");
+    assert(recovery_attempts == 1);
+
+    runtime_oom_request.messages = {{"user", "Runtime OOM partial"}};
+    std::string partial_output;
+    auto partial_failure = recovering_backend.complete(
+        runtime_oom_request, [&](const std::string &chunk) { partial_output += chunk; }, {});
+    assert(!partial_failure.is_ok());
+    assert(partial_output == "partial");
+    assert(recovery_attempts == 1);
+
     request.messages = {{"user", "Incomplete tools"}};
     auto incomplete = backend->complete(request, [](const std::string &) {}, {});
     assert(!incomplete.is_ok());

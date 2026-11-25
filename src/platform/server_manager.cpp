@@ -117,6 +117,7 @@ bool indicates_out_of_memory(std::string diagnostic) {
            diagnostic.find("out of device memory") != std::string::npos ||
            diagnostic.find("insufficient memory") != std::string::npos ||
            diagnostic.find("device memory allocation") != std::string::npos ||
+           diagnostic.find("failed to allocate memory") != std::string::npos ||
            diagnostic.find("cudamalloc failed: out of memory") != std::string::npos ||
            diagnostic.find("failed to allocate compute buffers") != std::string::npos ||
            diagnostic.find("failed to allocate compute pp buffers") != std::string::npos ||
@@ -234,6 +235,17 @@ util::Result<util::Void> ServerManager::restart_after_out_of_memory() {
     config_.context_tokens = reduced_context;
     stop();
     return start();
+}
+
+util::Result<bool> ServerManager::recover_runtime_out_of_memory(std::string_view request_error) {
+    const auto diagnostics = process_ ? process_->diagnostic_output() : std::string{};
+    if (!indicates_out_of_memory(std::string(request_error)) &&
+        !indicates_out_of_memory(diagnostics))
+        return util::Result<bool>::ok(false);
+    auto restarted = restart_after_out_of_memory();
+    if (!restarted.is_ok())
+        return util::Result<bool>::fail(restarted.error());
+    return util::Result<bool>::ok(true);
 }
 
 void ServerManager::stop() noexcept {

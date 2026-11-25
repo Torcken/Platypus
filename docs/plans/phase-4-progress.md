@@ -24,8 +24,11 @@
   shutdown is implemented with fake process and health probes. `run
   --managed-model` integrates process start/readiness/shutdown into CLI runs. A source build script
   now builds the ADR-002-pinned server with automatic Metal/CUDA/Vulkan/CPU selection and explicit
-  backend overrides (ADR-032); its Linux CPU binary was built and version-checked locally. Runtime
-  inference OOM errors, GPU server builds, and hosted CI remain unverified.
+  backend overrides (ADR-032); its Linux CPU binary was built and version-checked locally. Managed
+  inference requests now classify HTTP and child diagnostics and retry once at reduced context only
+  before any streamed output escapes (ADR-033). Fake HTTP/process tests cover retry bounds and
+  partial-stream no-replay. Real-model OOM reproduction, GPU server builds, and hosted CI remain
+  unverified.
 - [ ] Add setup wizard, Linux installer, Homebrew formula, update command, and distribution docs.
   In progress: `platypus models list`, `recommend`, and `download` use the validated catalog,
   detected host facts, and verified downloader; source-tree and install catalog lookup are wired.
@@ -51,8 +54,9 @@
   installed Platypus binary and model catalog smoke check pass. Hosted CI outcomes and supported GPU
   execution remain unverified.
 - [x] Run all local verification presets: dev, ASan, UBSan (10/10 CTest tests each) and Python (41 tests).
-  Re-run after setup sample-task changes: all three CTest presets passed 10/10 and Python passed
-  41/41. Real-model execution of the setup sample remains unverified.
+  Re-run after setup sample-task and runtime OOM changes: all three CTest presets passed 10/10 and
+  Python passed 41/41. Fake HTTP/process tests verify one reduced-context retry and no replay after
+  partial output. Real-model OOM and setup sample execution remain unverified.
 - [ ] Document remote CI outcomes when supported-host workflows are available.
 - [ ] Human: verify unsupported-by-default installation on five machines, including AMD 6 GB,
   M1 16 GB, and Titan V.

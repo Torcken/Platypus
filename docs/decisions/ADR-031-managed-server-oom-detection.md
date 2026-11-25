@@ -15,12 +15,11 @@ Drain the server's stdout and stderr continuously through reproc pipes into a 64
 When the child exits before readiness, classify only known allocation phrases from the pinned
 llama.cpp source, including CUDA, Vulkan, Metal, and context-allocation failures. Retry matching
 startup failures within the existing limit, halving context on each retry. Generic exits remain
-failures. This does not classify OOM during later inference.
+failures. Runtime inference recovery is addressed separately in ADR-033.
 
 ## Consequences
 
 The reader drains output throughout the child lifetime, avoiding pipe backpressure and unbounded log
 storage. The process wrapper serializes pipe polling and shutdown. Tests cover classification,
-context reduction, and the real process/pipe path with a fake child. Runtime inference OOM recovery
-GPU allocation diagnostics outside the pinned phrases and runtime inference OOM recovery remain
-outside this decision.
+context reduction, and the real process/pipe path with a fake child. GPU allocation diagnostics
+outside the pinned phrases remain outside this decision.

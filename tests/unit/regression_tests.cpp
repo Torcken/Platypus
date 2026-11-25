@@ -351,6 +351,38 @@ TEST_CASE("Managed llama-server waits for health and bounds OOM restarts") {
     REQUIRE_FALSE(manager.restart_after_out_of_memory().is_ok());
     manager.stop();
 }
+TEST_CASE("Managed llama-server recovers only recognized runtime OOMs within its restart limit") {
+    struct FakeProcess final : platform::ServerProcess {
+        bool running = true;
+        bool is_running() override { return running; }
+        std::string diagnostic_output() const override { return {}; }
+        void stop() noexcept override { running = false; }
+    };
+    auto launches = std::make_shared<unsigned int>(0);
+    auto contexts = std::make_shared<std::vector<std::size_t>>();
+    platform::ServerManager manager(
+        {"llama-server", "model.gguf", 8126, 16384, 4096, std::chrono::milliseconds(1000), 1},
+        [launches, contexts](const auto &config) {
+            ++*launches;
+            contexts->push_back(config.context_tokens);
+            std::shared_ptr<platform::ServerProcess> process = std::make_shared<FakeProcess>();
+            return util::Result<std::shared_ptr<platform::ServerProcess>>::ok(std::move(process));
+        },
+        [](const auto &) { return true; });
+    REQUIRE(manager.start().is_ok());
+    auto generic = manager.recover_runtime_out_of_memory("HTTP 500: generation failed");
+    REQUIRE(generic.is_ok());
+    REQUIRE_FALSE(generic.value());
+    REQUIRE(*launches == 1);
+    auto recovered = manager.recover_runtime_out_of_memory("HTTP 500: CUDA error: out of memory");
+    REQUIRE(recovered.is_ok());
+    REQUIRE(recovered.value());
+    REQUIRE(*launches == 2);
+    REQUIRE(contexts->at(1) == 8192);
+    auto exhausted = manager.recover_runtime_out_of_memory("out of device memory");
+    REQUIRE_FALSE(exhausted.is_ok());
+    REQUIRE(*launches == 2);
+}
 TEST_CASE("Managed llama-server fails closed when the child exits before readiness") {
     struct ExitedProcess final : platform::ServerProcess {
         bool is_running() override { return false; }
