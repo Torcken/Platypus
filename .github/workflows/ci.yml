@@ -116,8 +116,10 @@ jobs:
             PLATYPUS_BUILD_DIR="$RUNNER_TEMP/platypus-build" \
             PLATYPUS_BUILD_JOBS=2 CMAKE_BUILD_PARALLEL_LEVEL=2 scripts/install-linux.sh
           "$prefix/bin/platypus" --version | grep -Fx '0.1.0'
-          PLATYPUS_MODEL_CATALOG="$prefix/share/platypus/profiles/catalog.json" \
-            "$prefix/bin/platypus" models list | grep -F 'ornith-1.0-9b-q4_k_m'
+          models="$(PLATYPUS_MODEL_CATALOG="$prefix/share/platypus/profiles/catalog.json" \
+            "$prefix/bin/platypus" models list)"
+          printf '%s\n' "$models" | grep -F 'ornith-1.0-9b-q4_k_m'
+          test "$(printf '%s\n' "$models" | wc -l)" -eq 5
           "$prefix/bin/llama-server" --version | grep 'commit 2d8a32502'
   fuzz:
     runs-on: ubuntu-24.04
