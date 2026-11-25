@@ -85,17 +85,17 @@ fi
 
 mkdir -p "$(dirname "${llama_source}")"
 if [[ ! -d "${llama_source}/.git" ]]; then
-  git clone --filter=blob:none --no-checkout https://github.com/ggml-org/llama.cpp.git "${llama_source}"
+  git clone --filter=blob:none --depth=1 https://github.com/ggml-org/llama.cpp.git "${llama_source}"
 fi
 if [[ "$(git -C "${llama_source}" remote get-url origin)" != "https://github.com/ggml-org/llama.cpp.git" ]]; then
   echo "Unexpected llama.cpp checkout at ${llama_source}" >&2
   exit 1
 fi
+if [[ -n "$(git -C "${llama_source}" status --porcelain)" ]]; then
+  echo "Refusing to build a modified llama.cpp checkout at ${llama_source}" >&2
+  exit 1
+fi
 if [[ "$(git -C "${llama_source}" rev-parse HEAD 2>/dev/null || true)" != "${llama_commit}" ]]; then
-  if [[ -n "$(git -C "${llama_source}" status --porcelain)" ]]; then
-    echo "Refusing to change a modified llama.cpp checkout at ${llama_source}" >&2
-    exit 1
-  fi
   git -C "${llama_source}" fetch --depth=1 origin "${llama_commit}"
   git -C "${llama_source}" checkout --detach "${llama_commit}"
 fi

@@ -1,5 +1,21 @@
 # Phase 4 Progress
 
+## Review fixes — 2026-11-25
+
+The repository is now public (human decision). Branch `phase-4` and tag `v0.1.0`
+were pushed at `d0eaf5f`. Hosted CI now starts, but the tagged release failed its
+verification gate; no successful release is claimed.
+
+This review fixes fresh llama.cpp clones being rejected as dirty, allows no modified
+source at the pinned revision, installs ripgrep in CI, resolves installed catalogs
+relative to the executable, and retains updater recovery files if rollback fails.
+Interruptions now attempt restoration as well. See [the review record](review-2026-11-25.md).
+
+Verification after these fixes: dev, ASan, and UBSan each passed 10/10 CTest tests;
+41 benchmark tests and 9 installer/updater tests passed. Loopback fixture tests required
+execution outside the filesystem/network sandbox. Hosted validation of these fixes is pending.
+
+
 - [x] Resolve Windows v1.0 support before platform work (ADR-025).
 - [x] Define catalog v1, validate pinned HF artifacts and SHA-256 values, and test deterministic
   RAM/VRAM-aware fast/balanced/quality ranking (ADR-026, ADR-030). The catalog includes four

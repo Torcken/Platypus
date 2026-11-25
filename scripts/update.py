@@ -32,6 +32,10 @@ TARGETS = {
 }
 
 
+class RollbackError(RuntimeError):
+    """Restoration failed; the staging directory must be retained for recovery."""
+
+
 class GithubRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Allow only HTTPS GitHub asset redirects and drop API credentials cross-host."""
 
@@ -257,14 +261,22 @@ def install_transaction(prefix: Path, staged: Path, version: str) -> None:
         )
         if check.returncode != 0 or check.stdout.strip() != version:
             raise ValueError("Updated Platypus failed its version startup check")
-    except Exception:
+    except BaseException as original:
+        failures = []
         for destination, previous in reversed(changed):
-            if destination.is_dir() and not destination.is_symlink():
-                shutil.rmtree(destination)
-            else:
-                destination.unlink(missing_ok=True)
-            if previous and previous.exists():
-                os.replace(previous, destination)
+            try:
+                if previous is not None:
+                    # Atomic replacement also preserves the backup if restoration fails.
+                    os.replace(previous, destination)
+                else:
+                    destination.unlink(missing_ok=True)
+            except OSError as error:
+                failures.append(f"{destination}: {error}")
+        if failures:
+            raise RollbackError(
+                f"Update failed ({original}); recovery files retained at {backup}: "
+                + "; ".join(failures)
+            ) from original
         raise
 
 
@@ -338,11 +350,16 @@ def update() -> int:
                 raise ValueError("Release archive SHA-256 does not match SHA256SUMS")
             prefix.mkdir(parents=True, exist_ok=True)
             staging = Path(tempfile.mkdtemp(prefix=".platypus-update-", dir=prefix))
+            preserve_recovery = False
             try:
                 extract_release(archive_path, staging, target)
                 install_transaction(prefix, staging, version)
+            except RollbackError:
+                preserve_recovery = True
+                raise
             finally:
-                shutil.rmtree(staging, ignore_errors=True)
+                if not preserve_recovery:
+                    shutil.rmtree(staging, ignore_errors=True)
         print(f"Updated Platypus {current} to {version} ({target}).")
         return 0
     except urllib.error.HTTPError as error:
@@ -351,7 +368,7 @@ def update() -> int:
             detail += "; check GH_TOKEN or `gh auth login` and repository read access"
         print(f"Platypus update failed: {detail}", file=sys.stderr)
         return 1
-    except (OSError, KeyError, ValueError, urllib.error.URLError, json.JSONDecodeError,
+    except (OSError, KeyError, ValueError, RollbackError, urllib.error.URLError,
             subprocess.SubprocessError, tarfile.TarError) as error:
         detail = str(error).strip() or error.__class__.__name__
         if not token and "HTTP Error 404" in detail:

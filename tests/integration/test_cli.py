@@ -3,6 +3,7 @@ from pathlib import Path
 import json
 import os
 import socket
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -19,6 +20,25 @@ assert models.returncode == 0, models.stderr
 assert "ornith-1.0-9b-q4_k_m" in models.stdout
 assert "gemma-4-12b-q4_0" in models.stdout
 assert "GiB" in models.stdout
+
+# A release installed at a new prefix must use its own catalog, even when the
+# original source checkout still exists on the developer's machine.
+with tempfile.TemporaryDirectory(prefix="platypus-relocated-") as temporary:
+    prefix = Path(temporary)
+    relocated = prefix / "bin/platypus"
+    relocated.parent.mkdir()
+    shutil.copy2(binary, relocated)
+    installed_catalog = prefix / "share/platypus/profiles/catalog.json"
+    installed_catalog.parent.mkdir(parents=True)
+    data = json.loads(catalog.read_text())
+    data["models"][0]["display_name"] = "Relocated catalog fixture"
+    installed_catalog.write_text(json.dumps(data))
+    environment = os.environ.copy()
+    environment.pop("PLATYPUS_MODEL_CATALOG", None)
+    result = subprocess.run([str(relocated), "models", "list"], cwd=prefix,
+                            env=environment, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert "Relocated catalog fixture" in result.stdout, result.stdout
 setup = subprocess.run([binary, "setup"], capture_output=True, text=True, timeout=10)
 assert setup.returncode == 2
 assert "requires an interactive terminal" in setup.stderr

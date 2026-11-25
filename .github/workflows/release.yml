@@ -12,7 +12,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
       - name: Install verification dependencies
-        run: sudo apt-get update && sudo apt-get install -y ninja-build g++ libcurl4-openssl-dev libsqlite3-dev libssl-dev
+        run: sudo apt-get update && sudo apt-get install -y ninja-build g++ libcurl4-openssl-dev libsqlite3-dev libssl-dev ripgrep
       - run: cmake --preset dev
       - run: cmake --build --preset dev --parallel 2
       - run: ctest --preset dev --output-on-failure
@@ -42,7 +42,7 @@ jobs:
         if: startsWith(matrix.target, 'linux')
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build g++ libcurl4-openssl-dev libsqlite3-dev libssl-dev
+          sudo apt-get install -y ninja-build g++ libcurl4-openssl-dev libsqlite3-dev libssl-dev ripgrep
           if [[ '${{ matrix.target }}' == *-vulkan ]]; then
             sudo apt-get install -y libvulkan-dev glslc spirv-headers
           fi
@@ -50,7 +50,7 @@ jobs:
         if: startsWith(matrix.target, 'macos')
         run: |
           test "$(uname -m)" = arm64
-          brew install llvm ninja curl sqlite openssl@3
+          brew install llvm ninja curl sqlite openssl@3 ripgrep
           echo "CC=$(brew --prefix llvm)/bin/clang" >> "$GITHUB_ENV"
           echo "CXX=$(brew --prefix llvm)/bin/clang++" >> "$GITHUB_ENV"
           echo 'CXXFLAGS=-stdlib=libc++' >> "$GITHUB_ENV"

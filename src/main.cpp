@@ -28,7 +28,7 @@ namespace {
 volatile std::sig_atomic_t interrupted = 0;
 void interrupt(int) { interrupted = 1; }
 
-int update_command(const char *argument_zero) {
+std::filesystem::path executable_path(const char *argument_zero = "platypus") {
     std::filesystem::path executable;
 #ifdef __linux__
     char buffer[4096]{};
@@ -44,7 +44,11 @@ int update_command(const char *argument_zero) {
 #endif
     if (executable.empty())
         executable = std::filesystem::absolute(argument_zero);
-    executable = std::filesystem::weakly_canonical(executable);
+    return std::filesystem::weakly_canonical(executable);
+}
+
+int update_command(const char *argument_zero) {
+    const auto executable = executable_path(argument_zero);
     const auto installed_script =
         executable.parent_path().parent_path() / "libexec/platypus/update.py";
     const std::filesystem::path source_script(PLATYPUS_SOURCE_UPDATE_SCRIPT_PATH);
@@ -67,6 +71,10 @@ int update_command(const char *argument_zero) {
 std::filesystem::path model_catalog_path() {
     if (const auto *configured = std::getenv("PLATYPUS_MODEL_CATALOG"))
         return configured;
+    const auto installed =
+        executable_path().parent_path().parent_path() / "share/platypus/profiles/catalog.json";
+    if (std::filesystem::is_regular_file(installed))
+        return installed;
     const std::filesystem::path source_path(PLATYPUS_SOURCE_CATALOG_PATH);
     if (std::filesystem::is_regular_file(source_path))
         return source_path;
