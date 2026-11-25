@@ -121,6 +121,13 @@ target_link_libraries(platypus PRIVATE core ftxui::component ftxui::dom ftxui::s
 target_compile_definitions(platypus PRIVATE
     PLATYPUS_SOURCE_CATALOG_PATH="${PROJECT_SOURCE_DIR}/profiles/catalog.json"
     PLATYPUS_INSTALL_CATALOG_PATH="${CMAKE_INSTALL_FULL_DATADIR}/platypus/profiles/catalog.json")
+if(APPLE)
+    set_target_properties(platypus PROPERTIES
+        INSTALL_RPATH "@loader_path/../${CMAKE_INSTALL_LIBDIR}")
+else()
+    set_target_properties(platypus PROPERTIES
+        INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+endif()
 install(TARGETS platypus RUNTIME DESTINATION bin)
 install(DIRECTORY profiles/ DESTINATION ${CMAKE_INSTALL_DATADIR}/platypus/profiles)
 find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
