@@ -18,6 +18,7 @@ development package, `glslc`, and a DRM render node are present; fall back to CP
 ## Consequences
 
 The source installer chooses a backend for the machine on which it builds, then first-run setup uses
-that installed server without another backend prompt. Automatic selection depends on build tools and
-device nodes being visible during installation. A CPU fallback remains available when probes fail;
-the choice has not yet been validated on the five target machines.
+that installed server without another backend prompt. Selection is a pure helper with regression
+coverage for CUDA/Vulkan priority, CPU fallback, Metal, and unsupported OSes. Automatic selection
+depends on build tools and device nodes being visible during installation. The choice has not yet
+been validated on the five target machines.

@@ -42,7 +42,7 @@
   the pinned CPU server and install/catalog smoke step. The locally installed Platypus binary and
   model catalog smoke check pass. All new backend jobs and supported GPU execution remain
   unverified.
-- [x] Run all local verification presets: dev, ASan, UBSan (9/9 CTest tests each) and Python (41 tests).
+- [x] Run all local verification presets: dev, ASan, UBSan (10/10 CTest tests each) and Python (41 tests).
 - [ ] Document remote CI outcomes when supported-host workflows are available.
 - [ ] Human: verify unsupported-by-default installation on five machines, including AMD 6 GB,
   M1 16 GB, and Titan V.

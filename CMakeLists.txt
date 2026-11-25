@@ -163,10 +163,13 @@ if(BUILD_TESTING)
     add_test(NAME regression_tests COMMAND regression_tests)
     add_test(NAME cli_integration COMMAND ${Python3_EXECUTABLE}
         ${PROJECT_SOURCE_DIR}/tests/integration/test_cli.py $<TARGET_FILE:platypus>)
+    add_test(NAME server_backend_selection COMMAND ${Python3_EXECUTABLE}
+        ${PROJECT_SOURCE_DIR}/tests/integration/test_backend_selection.py)
     add_test(NAME terminal_smoke COMMAND ${Python3_EXECUTABLE}
         ${PROJECT_SOURCE_DIR}/tests/integration/test_terminal.py $<TARGET_FILE:platypus>)
     set_tests_properties(context_manager_test execution_engine_test llm_layer_test test_tools
-        e2e_tests history_truncation_test regression_tests cli_integration terminal_smoke PROPERTIES TIMEOUT 30 RUN_SERIAL TRUE)
+        e2e_tests history_truncation_test regression_tests cli_integration server_backend_selection
+        terminal_smoke PROPERTIES TIMEOUT 30 RUN_SERIAL TRUE)
 endif()
 if(PLATYPUS_BUILD_FUZZERS)
     set(CMAKE_REQUIRED_FLAGS "-fsanitize=fuzzer,address,undefined")

@@ -3,6 +3,7 @@ set -euo pipefail
 
 readonly llama_commit="2d8a32502909ca065c41c4cf5f2fb1c427c047fc"
 source_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${source_root}/scripts/server-backend-selection.sh"
 build_root="${PLATYPUS_BUILD_DIR:-${source_root}/build/install}"
 prefix="${PLATYPUS_INSTALL_PREFIX:-${HOME}/.local}"
 llama_source="${build_root}/_deps/llama.cpp"
@@ -12,29 +13,30 @@ build_jobs="${PLATYPUS_BUILD_JOBS:-2}"
 backend_reason="explicit PLATYPUS_LLAMA_BACKEND setting"
 
 if [[ "${backend}" == auto ]]; then
-  case "$(uname -s)" in
-    Darwin)
-      backend=metal
-      backend_reason="native Apple Metal support"
-      ;;
-    Linux)
-      if command -v nvcc >/dev/null 2>&1 && command -v nvidia-smi >/dev/null 2>&1 &&
-        nvidia-smi -L >/dev/null 2>&1; then
-        backend=cuda
-        backend_reason="CUDA toolkit and an available NVIDIA GPU"
-      elif command -v pkg-config >/dev/null 2>&1 && pkg-config --exists vulkan &&
-        command -v glslc >/dev/null 2>&1 && compgen -G '/dev/dri/renderD*' >/dev/null; then
-        backend=vulkan
-        backend_reason="Vulkan development tools and a Linux render device"
-      else
-        backend=cpu
-        backend_reason="no usable CUDA or Vulkan build environment was detected"
-      fi
-      ;;
-    *)
-      backend=cpu
-      backend_reason="no GPU backend auto-detection for this operating system"
-      ;;
+  cuda_toolkit=no
+  nvidia_device=no
+  vulkan_tools=no
+  render_device=no
+  if command -v nvcc >/dev/null 2>&1; then
+    cuda_toolkit=yes
+  fi
+  if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
+    nvidia_device=yes
+  fi
+  if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists vulkan &&
+    command -v glslc >/dev/null 2>&1; then
+    vulkan_tools=yes
+  fi
+  if compgen -G '/dev/dri/renderD*' >/dev/null; then
+    render_device=yes
+  fi
+  backend="$(platypus_select_server_backend "$(uname -s)" "${cuda_toolkit}" \
+    "${nvidia_device}" "${vulkan_tools}" "${render_device}")"
+  case "${backend}" in
+    metal) backend_reason="native Apple Metal support" ;;
+    cuda) backend_reason="CUDA toolkit and an available NVIDIA GPU" ;;
+    vulkan) backend_reason="Vulkan development tools and a Linux render device" ;;
+    cpu) backend_reason="no usable CUDA or Vulkan build environment was detected" ;;
   esac
   echo "Automatically selected llama-server backend: ${backend} (${backend_reason})." >&2
 fi
