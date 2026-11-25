@@ -6,6 +6,7 @@ add_library(util STATIC
     ../safety/snapshot_store.cpp
     ../platform/process.cpp
     ../platform/clipboard.cpp
+    ../platform/model_catalog.cpp
 )
 
 target_include_directories(util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

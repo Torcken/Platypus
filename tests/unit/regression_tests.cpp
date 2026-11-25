@@ -11,6 +11,7 @@
 #include "llm/remote_provider.hpp"
 #include "llm/tool_grammar.hpp"
 #include "platform/clipboard.hpp"
+#include "platform/model_catalog.hpp"
 #include "platform/process.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -158,6 +159,67 @@ TEST_CASE("Remote provider settings require explicit endpoint model prices and t
     REQUIRE(configured.is_ok());
     REQUIRE(configured.value()->model == "sample");
     REQUIRE(configured.value()->max_output_tokens == 200);
+}
+TEST_CASE("Model catalog validates pinned artifacts and ranks hardware-compatible choices") {
+    const auto project_root = fs::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto maintained =
+        platform::parse_model_catalog(read(project_root / "profiles/catalog.json"));
+    REQUIRE(maintained.is_ok());
+    REQUIRE(maintained.value().models.size() == 4);
+    const auto gib = std::uint64_t{1024} * 1024 * 1024;
+    const auto hash = std::string(64, 'a');
+    auto model = [&](std::string id, std::string quant, std::uint64_t size, std::uint64_t memory,
+                     std::uint64_t vram, nlohmann::json ranks) {
+        return nlohmann::json{{"id", std::move(id)},
+                              {"display_name", "Test model"},
+                              {"quantization", std::move(quant)},
+                              {"url", "https://huggingface.co/test/model/resolve/" +
+                                          std::string(40, 'b') + "/model.gguf"},
+                              {"sha256", hash},
+                              {"size_hint_bytes", size},
+                              {"minimum_memory_bytes", memory},
+                              {"minimum_gpu_memory_bytes", vram},
+                              {"profile", "profiles/test.toml"},
+                              {"ranks", std::move(ranks)}};
+    };
+    const auto document = nlohmann::json{
+        {"version", 1},
+        {"models", nlohmann::json::array(
+                       {model("fast-q4", "Q4_K_M", 5 * gib, 8 * gib, 4 * gib,
+                              {{"fast", 1}, {"balanced", 2}, {"quality", nullptr}}),
+                        model("balanced-q6", "Q6_K", 8 * gib, 12 * gib, 8 * gib,
+                              {{"fast", nullptr}, {"balanced", 1}, {"quality", 2}}),
+                        model("quality-q8", "Q8_0", 12 * gib, 16 * gib, 12 * gib,
+                              {{"fast", nullptr}, {"balanced", nullptr}, {"quality", 1}})})}};
+    auto catalog = platform::parse_model_catalog(document.dump());
+    REQUIRE(catalog.is_ok());
+    const platform::HardwareFacts modest{16 * gib, 6 * gib};
+    REQUIRE(platform::recommend_model(catalog.value(), modest, platform::ModelPreference::fast)
+                .value()
+                .id == "fast-q4");
+    REQUIRE(platform::recommend_model(catalog.value(), modest, platform::ModelPreference::balanced)
+                .value()
+                .id == "fast-q4");
+    REQUIRE_FALSE(
+        platform::recommend_model(catalog.value(), modest, platform::ModelPreference::quality)
+            .is_ok());
+    REQUIRE(platform::recommend_model(catalog.value(), {64 * gib, 24 * gib},
+                                      platform::ModelPreference::quality)
+                .value()
+                .id == "quality-q8");
+    REQUIRE_FALSE(
+        platform::recommend_model(catalog.value(), {4 * gib, 0}, platform::ModelPreference::fast)
+            .is_ok());
+    auto tampered = document;
+    tampered["models"][0]["sha256"] = "bad";
+    REQUIRE_FALSE(platform::parse_model_catalog(tampered.dump()).is_ok());
+    auto escaping_profile = document;
+    escaping_profile["models"][0]["profile"] = "profiles/../outside.toml";
+    REQUIRE_FALSE(platform::parse_model_catalog(escaping_profile.dump()).is_ok());
+    auto moving_reference = document;
+    moving_reference["models"][0]["url"] =
+        "https://huggingface.co/test/model/resolve/main/model.gguf";
+    REQUIRE_FALSE(platform::parse_model_catalog(moving_reference.dump()).is_ok());
 }
 TEST_CASE("Engine uses approved remote calls for proposals and reviews only") {
     Workspace workspace;

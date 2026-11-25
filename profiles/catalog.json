@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "ornith-1.0-9b-q4_k_m",
+      "display_name": "Ornith 1.0 9B Q4_K_M",
+      "quantization": "Q4_K_M",
+      "url": "https://huggingface.co/ornith-ai/Ornith-1.0-9B-GGUF/resolve/d6b5f9b2ef835df5085615e0c405ce0092cc8b53/ornith-1.0-9b-Q4_K_M.gguf",
+      "sha256": "5720d1f671b4996481274fffe01868c3c36e87c135cc8538471cc7bd6087b106",
+      "size_hint_bytes": 5629108704,
+      "minimum_memory_bytes": 8589934592,
+      "minimum_gpu_memory_bytes": 0,
+      "profile": "profiles/ornith-1.0.toml",
+      "ranks": { "fast": 1, "balanced": 1, "quality": null }
+    },
+    {
+      "id": "ornith-1.0-9b-q5_k_m",
+      "display_name": "Ornith 1.0 9B Q5_K_M",
+      "quantization": "Q5_K_M",
+      "url": "https://huggingface.co/ornith-ai/Ornith-1.0-9B-GGUF/resolve/d6b5f9b2ef835df5085615e0c405ce0092cc8b53/ornith-1.0-9b-Q5_K_M.gguf",
+      "sha256": "d1b36095636c096b04ea09e798a7a378956f2fa9099340bd54add1954aaf149c",
+      "size_hint_bytes": 6467969472,
+      "minimum_memory_bytes": 10737418240,
+      "minimum_gpu_memory_bytes": 8589934592,
+      "profile": "profiles/ornith-1.0.toml",
+      "ranks": { "fast": 2, "balanced": 2, "quality": 3 }
+    },
+    {
+      "id": "ornith-1.0-9b-q6_k",
+      "display_name": "Ornith 1.0 9B Q6_K",
+      "quantization": "Q6_K",
+      "url": "https://huggingface.co/ornith-ai/Ornith-1.0-9B-GGUF/resolve/d6b5f9b2ef835df5085615e0c405ce0092cc8b53/ornith-1.0-9b-Q6_K.gguf",
+      "sha256": "33b6f6a3e3f05078438e12df8a4b55c8acf78ceadcc639d2af1cf35a026e8387",
+      "size_hint_bytes": 7359259072,
+      "minimum_memory_bytes": 12884901888,
+      "minimum_gpu_memory_bytes": 10737418240,
+      "profile": "profiles/ornith-1.0.toml",
+      "ranks": { "fast": null, "balanced": 3, "quality": 2 }
+    },
+    {
+      "id": "ornith-1.0-9b-q8_0",
+      "display_name": "Ornith 1.0 9B Q8_0",
+      "quantization": "Q8_0",
+      "url": "https://huggingface.co/ornith-ai/Ornith-1.0-9B-GGUF/resolve/d6b5f9b2ef835df5085615e0c405ce0092cc8b53/ornith-1.0-9b-Q8_0.gguf",
+      "sha256": "d0e4bebaa8b3450c62090df1408f2ee5ccb2094f9c610ffde564a654483d4f37",
+      "size_hint_bytes": 9527500992,
+      "minimum_memory_bytes": 17179869184,
+      "minimum_gpu_memory_bytes": 12884901888,
+      "profile": "profiles/ornith-1.0.toml",
+      "ranks": { "fast": null, "balanced": null, "quality": 1 }
+    }
+  ]
+}

@@ -286,7 +286,8 @@ Exit criterion: integration tests for the full plan → execute → check → bu
 
 ## Phase 4 — Zero configuration and distribution
 
-Windows support is decided (ADR) before this phase starts.
+Native Windows is deferred beyond v1.0 (ADR-025); the supported targets remain Linux x86_64 and
+macOS arm64.
 
 1. Hardware detection: GPU, VRAM and architecture (NVML for Nvidia, Vulkan for AMD and others,
    sysctl/Metal on macOS), RAM, CPU.
