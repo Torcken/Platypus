@@ -327,6 +327,7 @@ TEST_CASE("Managed llama-server waits for health and bounds OOM restarts") {
     struct FakeProcess final : platform::ServerProcess {
         bool running = true;
         bool is_running() override { return running; }
+        std::string diagnostic_output() const override { return {}; }
         void stop() noexcept override { running = false; }
     };
     auto launches = std::make_shared<unsigned int>(0);
@@ -353,6 +354,9 @@ TEST_CASE("Managed llama-server waits for health and bounds OOM restarts") {
 TEST_CASE("Managed llama-server fails closed when the child exits before readiness") {
     struct ExitedProcess final : platform::ServerProcess {
         bool is_running() override { return false; }
+        std::string diagnostic_output() const override {
+            return "failed to allocate model weights";
+        }
         void stop() noexcept override {}
     };
     platform::ServerManager manager(
@@ -363,6 +367,35 @@ TEST_CASE("Managed llama-server fails closed when the child exits before readine
         },
         [](const auto &) { return false; });
     REQUIRE_FALSE(manager.start().is_ok());
+}
+TEST_CASE("Managed llama-server reduces context after a reported startup OOM") {
+    struct FakeProcess final : platform::ServerProcess {
+        explicit FakeProcess(bool running, std::string output = {})
+            : running(running), output(std::move(output)) {}
+        bool is_running() override { return running; }
+        std::string diagnostic_output() const override { return output; }
+        void stop() noexcept override { running = false; }
+
+        bool running;
+        std::string output;
+    };
+    auto contexts = std::make_shared<std::vector<std::size_t>>();
+    auto launches = std::make_shared<unsigned int>(0);
+    platform::ServerManager manager(
+        {"llama-server", "model.gguf", 8125, 16384, 4096, std::chrono::milliseconds(1000), 1},
+        [contexts, launches](const auto &config) {
+            contexts->push_back(config.context_tokens);
+            std::shared_ptr<platform::ServerProcess> process =
+                *launches == 0 ? std::make_shared<FakeProcess>(false, "GGML: insufficient memory")
+                               : std::make_shared<FakeProcess>(true);
+            ++*launches;
+            return util::Result<std::shared_ptr<platform::ServerProcess>>::ok(std::move(process));
+        },
+        [](const auto &) { return true; });
+    REQUIRE(manager.start().is_ok());
+    REQUIRE(contexts->size() == 2);
+    REQUIRE(contexts->at(0) == 16384);
+    REQUIRE(contexts->at(1) == 8192);
 }
 TEST_CASE("Engine uses approved remote calls for proposals and reviews only") {
     Workspace workspace;

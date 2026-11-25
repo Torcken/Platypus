@@ -2,6 +2,7 @@
 from pathlib import Path
 import json
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -21,6 +22,48 @@ assert "GiB" in models.stdout
 setup = subprocess.run([binary, "setup"], capture_output=True, text=True, timeout=10)
 assert setup.returncode == 2
 assert "requires an interactive terminal" in setup.stderr
+with tempfile.TemporaryDirectory(prefix="platypus-oom-retry-") as temporary:
+    root = Path(temporary)
+    model_file = root / "fixture.gguf"
+    model_file.write_bytes(b"fake-model")
+    state_file = root / "server-started"
+    arguments_file = root / "server-arguments"
+    server_bin = root / "fake-oom-server"
+    server_bin.write_text(
+        "#!/usr/bin/env python3\n"
+        "import http.server, pathlib, sys\n"
+        f"state = pathlib.Path({json.dumps(str(state_file))})\n"
+        f"arguments = pathlib.Path({json.dumps(str(arguments_file))})\n"
+        "with arguments.open('a') as output: output.write(' '.join(sys.argv[1:]) + '\\n')\n"
+        "if not state.exists():\n"
+        "    state.write_text('started')\n"
+        "    print('GGML: insufficient memory', file=sys.stderr)\n"
+        "    raise SystemExit(1)\n"
+        "port = int(sys.argv[sys.argv.index('--port') + 1])\n"
+        "class Handler(http.server.BaseHTTPRequestHandler):\n"
+        "    def do_GET(self):\n"
+        "        self.send_response(200)\n"
+        "        self.end_headers()\n"
+        "        self.wfile.write(b'{\"status\":\"ok\"}')\n"
+        "    def log_message(self, format, *args): pass\n"
+        "http.server.ThreadingHTTPServer(('127.0.0.1', port), Handler).serve_forever()\n"
+    )
+    server_bin.chmod(0o755)
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    endpoint = f"http://127.0.0.1:{port}"
+    result = subprocess.run(
+        [binary, "run", "--project", temporary, "--endpoint", endpoint,
+         "--managed-model", str(model_file), "--server-bin", str(server_bin)],
+        input="", capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stderr
+    assert "Managed llama-server ready" in result.stderr
+    assert arguments_file.is_file(), result.stderr + result.stdout
+    launches = [line.split() for line in arguments_file.read_text().splitlines()]
+    assert len(launches) == 2, launches
+    context_sizes = [args[args.index("--ctx-size") + 1] for args in launches]
+    assert context_sizes == ["32768", "16384"], context_sizes
 with tempfile.TemporaryDirectory(prefix="platypus-cli-") as temporary:
     root = Path(temporary)
     model_file = root / "fixture.gguf"

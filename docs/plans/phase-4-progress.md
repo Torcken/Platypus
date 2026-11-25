@@ -17,12 +17,14 @@
   `models download` and `setup`. Full real-model download acceptance remains.
 - [ ] Manage the pinned llama-server lifecycle, readiness, bounded OOM restart, and shutdown.
   In progress: reproc-backed child ownership, loopback-only launch, bounded readiness polling,
-  explicit bounded OOM recovery by the caller (each restart halves context to a configured floor),
-  and guaranteed shutdown are implemented with fake process and health probes. `run
+  startup OOM diagnostics are continuously drained into a 64 KiB in-memory tail and matching
+  pinned allocation errors trigger one context-halving retry by default (ADR-031). Generic startup
+  exits fail without retry. Unit and CLI end-to-end fake-child tests cover these paths. Guaranteed
+  shutdown is implemented with fake process and health probes. `run
   --managed-model` integrates process start/readiness/shutdown into CLI runs. A source build script
   now builds and installs the ADR-002-pinned CPU server, with opt-in CUDA/Vulkan configuration; its
-  Linux CPU binary was built and version-checked locally. The caller still must classify model-load
-  errors, GPU server builds and hosted CI remain unverified.
+  Linux CPU binary was built and version-checked locally. Runtime inference OOM errors, GPU server
+  builds, and hosted CI remain unverified.
 - [ ] Add setup wizard, Linux installer, Homebrew formula, update command, and distribution docs.
   In progress: `platypus models list`, `recommend`, and `download` use the validated catalog,
   detected host facts, and verified downloader; source-tree and install catalog lookup are wired.
@@ -36,7 +38,7 @@
   Linux Vulkan job builds the pinned server with Vulkan; CUDA 12.9.1 and CUDA 13.0.0 container jobs
   build the pinned CUDA server; macOS arm64 also builds it with the native Metal backend, alongside
   the pinned CPU server and install/catalog smoke step. The locally installed Platypus binary and
-  model catalog smoke check pass. These new hosted jobs and supported GPU execution remain
+  model catalog smoke check pass. All new backend jobs and supported GPU execution remain
   unverified.
 - [x] Run all local verification presets: dev, ASan, UBSan (9/9 CTest tests each) and Python (41 tests).
 - [ ] Document remote CI outcomes when supported-host workflows are available.

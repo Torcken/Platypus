@@ -25,6 +25,8 @@ class ServerProcess {
   public:
     virtual ~ServerProcess() = default;
     virtual bool is_running() = 0;
+    /// Return the bounded diagnostic tail used to classify a child startup failure.
+    virtual std::string diagnostic_output() const = 0;
     virtual void stop() noexcept = 0;
 };
 
