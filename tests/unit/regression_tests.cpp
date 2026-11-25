@@ -54,6 +54,23 @@ TEST_CASE("Tool parser repairs trailing commas and incomplete braces") {
     REQUIRE(
         core::Codec::parse_tool_calls(R"({"tool_call":{"name":"read","arguments":[]}})").empty());
 }
+TEST_CASE("Plan proposals are bounded structured output and do not execute tools") {
+    Workspace workspace;
+    auto backend = std::make_shared<llm::FakeBackend>();
+    backend->set_script("proposal-query",
+                        {R"({"steps":["Inspect the parser", "Add regression tests"]})"});
+    auto registry = std::make_shared<core::ToolRegistry>(workspace.root);
+    core::register_default_tools(*registry);
+    core::ExecutionEngine engine(backend, registry);
+    auto proposal = engine.propose_plan("proposal-query");
+    REQUIRE(proposal.is_ok());
+    REQUIRE(proposal.value().size() == 2);
+    REQUIRE(proposal.value()[0] == "Inspect the parser");
+    REQUIRE_FALSE(fs::exists(workspace.root / "PLAN.md"));
+    backend->set_script("invalid-proposal", {R"({"steps":["one", "two\nlines"]})"});
+    REQUIRE_FALSE(engine.propose_plan("invalid-proposal").is_ok());
+    REQUIRE_FALSE(fs::exists(workspace.root / "PLAN.md"));
+}
 TEST_CASE("Unapproved tools cannot mutate files or run commands") {
     Workspace workspace;
     core::ToolRegistry tools(workspace.root);

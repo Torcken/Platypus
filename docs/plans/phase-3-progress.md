@@ -5,6 +5,8 @@
 - [x] Interactive `/plan`, `/milestone`, `/task`, `/done`, and `/import` commands with explicit
   approval for mutations and project-contained import paths.
 - [ ] Plan-first proposal flow with approve/edit/reject behavior.
+- Proposal generation now has a bounded structured-output API and FakeBackend regression coverage;
+  CLI/TUI approval, editing, persistence, and execution wiring remain.
 - [x] `/review` emits a bounded diff/plan bundle for the latest milestone baseline.
 - [x] Persist latest-task check statuses in private `.platypus` metadata and include them in review
   bundles (ADR-021).

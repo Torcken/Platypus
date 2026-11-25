@@ -56,6 +56,10 @@ class ExecutionEngine {
     util::Result<std::string> run(const std::string &query, int max_steps = 25,
                                   bool headless = false, std::stop_token stop = {});
 
+    /// Ask the configured backend for a bounded, structured task proposal without running tools.
+    util::Result<std::vector<std::string>> propose_plan(const std::string &query,
+                                                        std::stop_token stop = {});
+
     /// Attach a session log; history is loaded without appending duplicate records.
     util::Result<bool> attach_session(std::shared_ptr<session::Store> store, const std::string &id);
     void set_token_callback(llm::TokenCallback callback) { on_token_ = std::move(callback); }
