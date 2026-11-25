@@ -18,6 +18,10 @@
   explicit one-time OOM recovery by the caller, and guaranteed shutdown are implemented with fake
   process and health probes. Runtime integration with model-load errors remains.
 - [ ] Add setup wizard, Linux installer, Homebrew formula, update command, and distribution docs.
+  In progress: `platypus models list`, `recommend`, and `download` use the validated catalog,
+  detected host facts, and verified downloader; source-tree and install catalog lookup are wired.
+  Interactive first-run flow, automatic server startup, installer/formula, updater, and packaging
+  documentation remain.
 - [ ] Extend CI for the supported Linux/macOS release targets and supported backend builds.
 - [x] Run all local verification presets: dev, ASan, UBSan (9/9 CTest tests each) and Python (41 tests).
 - [ ] Document remote CI outcomes when supported-host workflows are available.

@@ -3,18 +3,165 @@
 #include "core/execution_engine.hpp"
 #include "core/plan_commands.hpp"
 #include "llm/llm_backend_factory.hpp"
+#include "platform/hardware.hpp"
+#include "platform/model_catalog.hpp"
+#include "platform/model_download.hpp"
 #include "tui/terminal.hpp"
+#include <algorithm>
+#include <cctype>
 #include <csignal>
+#include <cstdlib>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <thread>
 #include <unistd.h>
 namespace {
 volatile std::sig_atomic_t interrupted = 0;
 void interrupt(int) { interrupted = 1; }
+
+std::filesystem::path model_catalog_path() {
+    if (const auto *configured = std::getenv("PLATYPUS_MODEL_CATALOG"))
+        return configured;
+    const std::filesystem::path source_path(PLATYPUS_SOURCE_CATALOG_PATH);
+    if (std::filesystem::is_regular_file(source_path))
+        return source_path;
+    return PLATYPUS_INSTALL_CATALOG_PATH;
+}
+
+platypus::util::Result<platypus::platform::ModelCatalog>
+load_catalog(const std::filesystem::path &path) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input)
+        return platypus::util::Result<platypus::platform::ModelCatalog>::fail(
+            "Cannot read model catalog: " + path.string());
+    std::string text(256 * 1024 + 1, '\0');
+    input.read(text.data(), static_cast<std::streamsize>(text.size()));
+    text.resize(static_cast<std::size_t>(input.gcount()));
+    return platypus::platform::parse_model_catalog(text);
+}
+
+std::string model_size(std::uint64_t bytes) {
+    constexpr double gib = 1024.0 * 1024.0 * 1024.0;
+    std::ostringstream value;
+    value << std::fixed << std::setprecision(1) << static_cast<double>(bytes) / gib;
+    return value.str() + " GiB";
+}
+
+int models_command(int argc, char *argv[]) {
+    using namespace platypus::platform;
+    if (argc < 3) {
+        std::cerr << "Usage: platypus models <list|recommend|download> [options]\n";
+        return 2;
+    }
+    const std::string command = argv[2];
+    auto catalog_path = model_catalog_path();
+    std::string model_id;
+    std::string preference = "balanced";
+    std::filesystem::path output_path;
+    for (int i = 3; i < argc; ++i) {
+        const std::string argument = argv[i];
+        if (argument == "--catalog" || argument == "--preference" || argument == "--output") {
+            if (++i >= argc) {
+                std::cerr << "Missing value for " << argument << '\n';
+                return 2;
+            }
+            if (argument == "--catalog")
+                catalog_path = argv[i];
+            else if (argument == "--preference")
+                preference = argv[i];
+            else
+                output_path = argv[i];
+        } else if (!argument.starts_with('-') && model_id.empty()) {
+            model_id = argument;
+        } else {
+            std::cerr << "Unknown models option: " << argument << '\n';
+            return 2;
+        }
+    }
+    auto catalog = load_catalog(catalog_path);
+    if (!catalog.is_ok()) {
+        std::cerr << catalog.error() << '\n';
+        return 1;
+    }
+    if (command == "list") {
+        for (const auto &model : catalog.value().models)
+            std::cout << model.id << "\t" << model.display_name << " (" << model.quantization
+                      << ")\t" << model_size(model.size_hint_bytes) << '\n';
+        return 0;
+    }
+    if (command == "recommend") {
+        const auto selected_preference = preference == "fast"       ? ModelPreference::fast
+                                         : preference == "balanced" ? ModelPreference::balanced
+                                         : preference == "quality"  ? ModelPreference::quality
+                                                                    : ModelPreference::balanced;
+        if (preference != "fast" && preference != "balanced" && preference != "quality") {
+            std::cerr << "Preference must be fast, balanced, or quality\n";
+            return 2;
+        }
+        auto hardware = detect_hardware();
+        if (!hardware.is_ok()) {
+            std::cerr << hardware.error() << '\n';
+            return 1;
+        }
+        auto recommendation =
+            recommend_model(catalog.value(), hardware.value().catalog_facts(), selected_preference);
+        if (!recommendation.is_ok()) {
+            std::cerr << recommendation.error() << '\n';
+            return 1;
+        }
+        const auto &model = recommendation.value();
+        std::cout << model.id << "\t" << model.display_name << " (" << model.quantization << ")\t"
+                  << model_size(model.size_hint_bytes) << '\n';
+        return 0;
+    }
+    if (command != "download" || model_id.empty()) {
+        std::cerr << "Usage: platypus models download MODEL_ID [--output FILE]\n";
+        return 2;
+    }
+    const auto model =
+        std::find_if(catalog.value().models.begin(), catalog.value().models.end(),
+                     [&](const auto &candidate) { return candidate.id == model_id; });
+    if (model == catalog.value().models.end()) {
+        std::cerr << "Unknown model id: " << model_id << '\n';
+        return 1;
+    }
+    if (output_path.empty()) {
+        const auto *home = std::getenv("HOME");
+        const auto safe_id = std::all_of(model_id.begin(), model_id.end(), [](unsigned char ch) {
+            return std::isalnum(ch) || ch == '.' || ch == '_' || ch == '-';
+        });
+        if (!home || !safe_id) {
+            std::cerr << "Set --output or HOME; model id is not a safe filename\n";
+            return 2;
+        }
+        output_path =
+            std::filesystem::path(home) / ".local/share/platypus/models" / (model_id + ".gguf");
+    }
+    int previous_percent = -1;
+    auto downloaded =
+        download_model(*model, output_path, [&](std::uint64_t received, std::uint64_t total) {
+            const auto percent = total == 0 ? 0 : static_cast<int>(received * 100 / total);
+            if (percent != previous_percent) {
+                std::cerr << "\rDownloading " << model_id << ": " << percent << "%" << std::flush;
+                previous_percent = percent;
+            }
+        });
+    std::cerr << '\n';
+    if (!downloaded.is_ok()) {
+        std::cerr << downloaded.error() << '\n';
+        return 1;
+    }
+    std::cout << "Verified model saved to " << downloaded.value().string() << '\n';
+    return 0;
+}
 } // namespace
 int main(int argc, char *argv[]) {
     using namespace platypus;
     try {
+        if (argc > 1 && std::string_view(argv[1]) == "models")
+            return models_command(argc, argv);
         bool headless = false, yes = false, undo = false, resume = false, direct = false;
         std::string resume_id;
         int steps = 25;
@@ -34,7 +181,8 @@ int main(int argc, char *argv[]) {
                        "[--project DIR] "
                        "[--endpoint URL] [--max-steps N] instruction\n"
                        "       platypus undo [--yes] [--project DIR]\nWithout an instruction, "
-                       "starts an interactive session. /undo restores the latest snapshot.\n";
+                       "starts an interactive session. /undo restores the latest snapshot.\n"
+                       "       platypus models list|recommend|download MODEL_ID\n";
                 return 0;
             }
             if (argument == "--version") {

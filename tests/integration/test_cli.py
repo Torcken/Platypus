@@ -11,6 +11,12 @@ from bench.metrics import compute_metrics
 from bench.proxy import ProxyServer
 
 binary = str(Path(sys.argv[1]).resolve())
+catalog = Path(__file__).resolve().parents[2] / "profiles" / "catalog.json"
+models = subprocess.run([binary, "models", "list", "--catalog", str(catalog)],
+                        capture_output=True, text=True, timeout=10)
+assert models.returncode == 0, models.stderr
+assert "ornith-1.0-9b-q4_k_m" in models.stdout
+assert "GiB" in models.stdout
 with tempfile.TemporaryDirectory(prefix="platypus-cli-") as temporary:
     root = Path(temporary)
     calls = ['{"steps":["Write the requested file"]}',
