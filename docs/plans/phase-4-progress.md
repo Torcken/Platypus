@@ -6,9 +6,9 @@
   estimates pending hardware and model-quality evidence.
 - [ ] Add Linux/macOS CPU, memory, GPU architecture, and VRAM detection with graceful fallbacks.
   In progress: CPU/RAM and architecture inventory, optional Vulkan device-local heap probe, Linux
-  DRM VRAM fallback, deterministic primary-GPU choice, native macOS Metal unified-memory capacity,
-  and GPU-absent tests are implemented. NVIDIA NVML probing and supported-host hardware validation
-  remain; Metal compilation awaits the macOS CI run.
+  DRM VRAM fallback, NVML NVIDIA name/architecture/VRAM probing, deterministic primary-GPU choice,
+  native macOS Metal unified-memory capacity, and GPU-absent tests are implemented. Supported-host
+  hardware validation remains; Metal compilation awaits the macOS CI run.
 - [ ] Implement resumable, bounded HTTPS downloads with progress and SHA-256 checks.
   In progress: catalog-only Hugging Face HTTPS URLs, size cap, resumable `.part` files, HTTPS-only
   redirects, progress and cancellation callbacks, OpenSSL SHA-256 verification, and atomic
@@ -27,8 +27,9 @@
   flow, automatic server startup, Homebrew formula, release updater, and assisted-free acceptance
   remain.
 - [ ] Extend CI for the supported Linux/macOS release targets and supported backend builds.
-  Existing Linux GCC/Clang/sanitizer and macOS arm64 jobs now provision OpenSSL Crypto; hosted CI
-  has not been triggered from this environment.
+  Existing Linux GCC/Clang/sanitizer and macOS arm64 jobs now provision OpenSSL Crypto; an optional
+  Vulkan-header Linux job and install/catalog smoke step were added. Hosted CI has not been
+  triggered from this environment.
 - [x] Run all local verification presets: dev, ASan, UBSan (9/9 CTest tests each) and Python (41 tests).
 - [ ] Document remote CI outcomes when supported-host workflows are available.
 - [ ] Human: verify unsupported-by-default installation on five machines, including AMD 6 GB,

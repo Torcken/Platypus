@@ -15,6 +15,7 @@
 #endif
 
 #ifdef __linux__
+#include <dlfcn.h>
 #include <filesystem>
 #endif
 
@@ -48,6 +49,94 @@ util::Result<std::uint64_t> system_memory() {
     return util::Result<std::uint64_t>::ok(static_cast<std::uint64_t>(pages) *
                                            static_cast<std::uint64_t>(page_size));
 }
+
+#ifdef __linux__
+class NvmlLibrary {
+  public:
+    using Init = int (*)();
+    using Shutdown = int (*)();
+    using GetCount = int (*)(unsigned int *);
+    using GetHandle = int (*)(unsigned int, void **);
+    using GetName = int (*)(void *, char *, unsigned int);
+    using GetMemory = int (*)(void *, struct NvmlMemory *);
+    using GetArchitecture = int (*)(void *, unsigned int *);
+
+    NvmlLibrary() {
+        handle_ = dlopen("libnvidia-ml.so.1", RTLD_NOW | RTLD_LOCAL);
+        if (!handle_)
+            handle_ = dlopen("libnvidia-ml.so", RTLD_NOW | RTLD_LOCAL);
+        init = symbol<Init>("nvmlInit_v2");
+        shutdown = symbol<Shutdown>("nvmlShutdown");
+        get_count = symbol<GetCount>("nvmlDeviceGetCount_v2");
+        get_handle = symbol<GetHandle>("nvmlDeviceGetHandleByIndex_v2");
+        get_name = symbol<GetName>("nvmlDeviceGetName");
+        get_memory = symbol<GetMemory>("nvmlDeviceGetMemoryInfo");
+        get_architecture = symbol<GetArchitecture>("nvmlDeviceGetArchitecture");
+        initialized_ = handle_ && init && shutdown && get_count && get_handle && get_name &&
+                       get_memory && init() == 0;
+    }
+
+    ~NvmlLibrary() {
+        if (initialized_)
+            (void)shutdown();
+        if (handle_)
+            dlclose(handle_);
+    }
+
+    NvmlLibrary(const NvmlLibrary &) = delete;
+    NvmlLibrary &operator=(const NvmlLibrary &) = delete;
+
+    explicit operator bool() const { return initialized_; }
+
+    template <typename Function> Function symbol(const char *name) const {
+        return handle_ ? reinterpret_cast<Function>(dlsym(handle_, name)) : nullptr;
+    }
+
+    Init init = nullptr;
+    Shutdown shutdown = nullptr;
+    GetCount get_count = nullptr;
+    GetHandle get_handle = nullptr;
+    GetName get_name = nullptr;
+    GetMemory get_memory = nullptr;
+    GetArchitecture get_architecture = nullptr;
+
+  private:
+    void *handle_ = nullptr;
+    bool initialized_ = false;
+};
+
+struct NvmlMemory {
+    unsigned long long total;
+    unsigned long long free;
+    unsigned long long used;
+};
+
+std::vector<GpuInfo> nvml_gpus() {
+    std::vector<GpuInfo> devices;
+    NvmlLibrary nvml;
+    if (!nvml)
+        return devices;
+    unsigned int count = 0;
+    if (nvml.get_count(&count) != 0 || count == 0 || count > 64)
+        return devices;
+    for (unsigned int index = 0; index < count; ++index) {
+        void *device = nullptr;
+        if (nvml.get_handle(index, &device) != 0 || !device)
+            continue;
+        char name[96]{};
+        NvmlMemory memory{};
+        if (nvml.get_name(device, name, sizeof(name)) != 0 ||
+            nvml.get_memory(device, &memory) != 0 || memory.total == 0)
+            continue;
+        unsigned int architecture = 0;
+        std::string architecture_name = "Unknown";
+        if (nvml.get_architecture && nvml.get_architecture(device, &architecture) == 0)
+            architecture_name = nvml_architecture_name(architecture);
+        devices.push_back({name, "NVIDIA", memory.total, "NVML", std::move(architecture_name)});
+    }
+    return devices;
+}
+#endif
 
 #ifdef PLATYPUS_HAVE_VULKAN
 class VulkanLibrary {
@@ -147,8 +236,8 @@ std::vector<GpuInfo> vulkan_gpus() {
                 local_bytes <= std::numeric_limits<std::uint64_t>::max() - heap.size)
                 local_bytes += heap.size;
         }
-        result.push_back(
-            {properties.deviceName, vendor_name(properties.vendorID), local_bytes, "Vulkan"});
+        result.push_back({properties.deviceName, vendor_name(properties.vendorID), local_bytes,
+                          "Vulkan", "Unknown"});
     }
     return result;
 }
@@ -183,7 +272,8 @@ std::vector<GpuInfo> linux_drm_gpus() {
         std::string product_name;
         if (std::getline(product_file, product_name) && !product_name.empty())
             gpu_name = product_name;
-        result.push_back({std::move(gpu_name), std::move(vendor), memory_bytes, "DRM sysfs"});
+        result.push_back(
+            {std::move(gpu_name), std::move(vendor), memory_bytes, "DRM sysfs", "Unknown"});
     }
     return result;
 }
@@ -194,6 +284,11 @@ std::vector<GpuInfo> system_gpus() {
     auto metal_devices = macos_metal_gpus();
     if (!metal_devices.empty())
         return metal_devices;
+#endif
+#ifdef __linux__
+    auto nvidia_devices = nvml_gpus();
+    if (!nvidia_devices.empty())
+        return nvidia_devices;
 #endif
 #ifdef PLATYPUS_HAVE_VULKAN
     auto devices = vulkan_gpus();
@@ -209,6 +304,31 @@ std::vector<GpuInfo> system_gpus() {
 #endif
 }
 } // namespace
+
+std::string nvml_architecture_name(unsigned int architecture) {
+    switch (architecture) {
+    case 2:
+        return "Kepler";
+    case 3:
+        return "Maxwell";
+    case 4:
+        return "Pascal";
+    case 5:
+        return "Volta";
+    case 6:
+        return "Turing";
+    case 7:
+        return "Ampere";
+    case 8:
+        return "Ada";
+    case 9:
+        return "Hopper";
+    case 10:
+        return "Blackwell";
+    default:
+        return "Unknown";
+    }
+}
 
 HardwareFacts HardwareInventory::catalog_facts() const {
     return {system_memory_bytes, primary_gpu ? primary_gpu->memory_bytes : 0};

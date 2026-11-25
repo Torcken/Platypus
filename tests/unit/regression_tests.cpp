@@ -225,6 +225,9 @@ TEST_CASE("Model catalog validates pinned artifacts and ranks hardware-compatibl
     REQUIRE_FALSE(platform::parse_model_catalog(moving_reference.dump()).is_ok());
 }
 TEST_CASE("Hardware detection remains usable without a GPU driver") {
+    REQUIRE(platform::nvml_architecture_name(5) == "Volta");
+    REQUIRE(platform::nvml_architecture_name(7) == "Ampere");
+    REQUIRE(platform::nvml_architecture_name(999) == "Unknown");
     auto inventory = platform::detect_hardware([] { return std::vector<platform::GpuInfo>{}; });
     REQUIRE(inventory.is_ok());
     REQUIRE(inventory.value().system_memory_bytes > 0);
@@ -232,9 +235,9 @@ TEST_CASE("Hardware detection remains usable without a GPU driver") {
     REQUIRE_FALSE(inventory.value().primary_gpu.has_value());
     REQUIRE(inventory.value().catalog_facts().gpu_memory_bytes == 0);
 
-    const std::vector<platform::GpuInfo> devices{{"Small GPU", "AMD", 6, "fixture"},
-                                                 {"Large GPU", "NVIDIA", 12, "fixture"},
-                                                 {"Shared GPU", "Intel", 12, "fixture"}};
+    const std::vector<platform::GpuInfo> devices{{"Small GPU", "AMD", 6, "fixture", "Unknown"},
+                                                 {"Large GPU", "NVIDIA", 12, "fixture", "Volta"},
+                                                 {"Shared GPU", "Intel", 12, "fixture", "Unknown"}};
     auto selected = platform::select_primary_gpu(devices);
     REQUIRE(selected.has_value());
     REQUIRE(selected->name == "Large GPU");

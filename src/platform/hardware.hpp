@@ -19,6 +19,7 @@ struct GpuInfo {
     std::string vendor;
     std::uint64_t memory_bytes;
     std::string detection_method;
+    std::string architecture;
 };
 
 /// Host CPU and memory information plus the best detected GPU, if a driver is available.
@@ -39,6 +40,9 @@ util::Result<HardwareInventory> detect_hardware(GpuEnumerator gpu_enumerator = {
 
 /// Choose the GPU with the largest reported memory; name breaks ties deterministically.
 std::optional<GpuInfo> select_primary_gpu(const std::vector<GpuInfo> &devices);
+
+/// Convert the stable NVML architecture identifiers to readable names.
+std::string nvml_architecture_name(unsigned int architecture);
 
 } // namespace platypus::platform
 

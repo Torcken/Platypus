@@ -9,15 +9,16 @@ systems.
 ## Decision
 
 Always detect CPU architecture, logical processor count, and physical system memory using portable
-host interfaces. When Vulkan is available at build time, enumerate physical devices and sum
-device-local heaps. On Linux, fall back to DRM sysfs VRAM totals if Vulkan returns no GPU. On macOS,
-use Metal's recommended working set as the unified-memory GPU capacity hint. Keep GPU enumeration
-injectable for tests. Return host facts even when no graphics device can be queried.
+host interfaces. On Linux, dynamically probe NVML first for NVIDIA device name, architecture, and
+memory; fall back to optional Vulkan enumeration and DRM sysfs VRAM totals. On macOS, use Metal's
+recommended working set as the unified-memory GPU capacity hint. Keep GPU enumeration injectable
+for tests. Return host facts even when no graphics device can be queried.
 
 ## Consequences
 
 CPU-only recommendations remain available without GPU libraries. Vulkan device-local heaps are
 capacity hints; integrated/UMA devices may report shared system memory, as defined by the
 [Khronos Vulkan memory model](https://docs.vulkan.org/refpages/latest/refpages/source/VkPhysicalDeviceMemoryProperties.html).
-NVIDIA-specific NVML and supported-host hardware acceptance remain Phase 4 work; no hardware
-acceptance is implied.
+NVML's device query interface supplies name, architecture, and total memory; the driver library is
+loaded dynamically and remains optional ([NVIDIA NVML API reference](https://docs.nvidia.com/deploy/nvml-api/latest/api/group__nvmlDeviceQueries.html)).
+Supported-host hardware acceptance is still open; no hardware acceptance is implied.

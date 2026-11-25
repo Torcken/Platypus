@@ -42,6 +42,23 @@ jobs:
       - run: cmake --build --preset ${{ matrix.preset }}
       - run: ctest --preset ${{ matrix.preset }} --output-on-failure
       - run: python3 -m unittest discover -s bench/tests -v
+      - name: Install and catalog smoke test
+        run: |
+          prefix="$RUNNER_TEMP/platypus-install"
+          cmake --install "build/${{ matrix.preset }}" --prefix "$prefix"
+          PLATYPUS_MODEL_CATALOG="$prefix/share/platypus/profiles/catalog.json" \
+            "$prefix/bin/platypus" models list
+  vulkan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Vulkan build dependencies
+        run: sudo apt-get update && sudo apt-get install -y ninja-build g++ libcurl4-openssl-dev libsqlite3-dev libssl-dev libvulkan-dev
+      - run: cmake --preset dev
+      - run: cmake --build --preset dev
+      - run: ctest --preset dev --output-on-failure
   fuzz:
     runs-on: ubuntu-24.04
     steps:

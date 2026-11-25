@@ -13,7 +13,7 @@ std::vector<GpuInfo> macos_metal_gpus() {
             return {};
         const auto memory_bytes = static_cast<std::uint64_t>(device.recommendedMaxWorkingSetSize);
         return {{device.name.UTF8String ? device.name.UTF8String : "Apple GPU", "Apple",
-                 memory_bytes, "Metal recommended working set"}};
+                 memory_bytes, "Metal recommended working set", "Apple silicon"}};
     }
 }
 
