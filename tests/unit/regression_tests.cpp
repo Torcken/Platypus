@@ -382,23 +382,31 @@ TEST_CASE("Managed llama-server reduces context after a reported startup OOM") {
         bool running;
         std::string output;
     };
-    auto contexts = std::make_shared<std::vector<std::size_t>>();
-    auto launches = std::make_shared<unsigned int>(0);
-    platform::ServerManager manager(
-        {"llama-server", "model.gguf", 8125, 16384, 4096, std::chrono::milliseconds(1000), 1},
-        [contexts, launches](const auto &config) {
-            contexts->push_back(config.context_tokens);
-            std::shared_ptr<platform::ServerProcess> process =
-                *launches == 0 ? std::make_shared<FakeProcess>(false, "GGML: insufficient memory")
-                               : std::make_shared<FakeProcess>(true);
-            ++*launches;
-            return util::Result<std::shared_ptr<platform::ServerProcess>>::ok(std::move(process));
-        },
-        [](const auto &) { return true; });
-    REQUIRE(manager.start().is_ok());
-    REQUIRE(contexts->size() == 2);
-    REQUIRE(contexts->at(0) == 16384);
-    REQUIRE(contexts->at(1) == 8192);
+    const std::vector<std::string> oom_diagnostics{
+        "GGML: insufficient memory",
+        "ggml_vulkan: Device memory allocation of size 4096 failed.",
+        "ggml_cuda: cudaMalloc failed: out of memory",
+    };
+    for (const auto &diagnostic : oom_diagnostics) {
+        auto contexts = std::make_shared<std::vector<std::size_t>>();
+        auto launches = std::make_shared<unsigned int>(0);
+        platform::ServerManager manager(
+            {"llama-server", "model.gguf", 8125, 16384, 4096, std::chrono::milliseconds(1000), 1},
+            [contexts, launches, diagnostic](const auto &config) {
+                contexts->push_back(config.context_tokens);
+                std::shared_ptr<platform::ServerProcess> process =
+                    *launches == 0 ? std::make_shared<FakeProcess>(false, diagnostic)
+                                   : std::make_shared<FakeProcess>(true);
+                ++*launches;
+                return util::Result<std::shared_ptr<platform::ServerProcess>>::ok(
+                    std::move(process));
+            },
+            [](const auto &) { return true; });
+        REQUIRE(manager.start().is_ok());
+        REQUIRE(contexts->size() == 2);
+        REQUIRE(contexts->at(0) == 16384);
+        REQUIRE(contexts->at(1) == 8192);
+    }
 }
 TEST_CASE("Engine uses approved remote calls for proposals and reviews only") {
     Workspace workspace;

@@ -116,6 +116,9 @@ bool indicates_out_of_memory(std::string diagnostic) {
     return diagnostic.find("out of memory") != std::string::npos ||
            diagnostic.find("out of device memory") != std::string::npos ||
            diagnostic.find("insufficient memory") != std::string::npos ||
+           diagnostic.find("device memory allocation") != std::string::npos ||
+           diagnostic.find("cudamalloc failed: out of memory") != std::string::npos ||
+           diagnostic.find("failed to allocate compute buffers") != std::string::npos ||
            diagnostic.find("failed to allocate compute pp buffers") != std::string::npos ||
            diagnostic.find("failed to allocate compute tg buffers") != std::string::npos;
 }
