@@ -31,6 +31,17 @@ std::filesystem::path model_catalog_path() {
     return PLATYPUS_INSTALL_CATALOG_PATH;
 }
 
+std::filesystem::path default_model_directory() {
+    const auto *home = std::getenv("HOME");
+    if (!home)
+        return {};
+#ifdef __APPLE__
+    return std::filesystem::path(home) / "Library/Application Support/Platypus/models";
+#else
+    return std::filesystem::path(home) / ".local/share/platypus/models";
+#endif
+}
+
 platypus::util::Result<platypus::platform::ModelCatalog>
 load_catalog(const std::filesystem::path &path) {
     std::ifstream input(path, std::ios::binary);
@@ -129,16 +140,15 @@ int models_command(int argc, char *argv[]) {
         return 1;
     }
     if (output_path.empty()) {
-        const auto *home = std::getenv("HOME");
         const auto safe_id = std::all_of(model_id.begin(), model_id.end(), [](unsigned char ch) {
             return std::isalnum(ch) || ch == '.' || ch == '_' || ch == '-';
         });
-        if (!home || !safe_id) {
+        auto directory = default_model_directory();
+        if (directory.empty() || !safe_id) {
             std::cerr << "Set --output or HOME; model id is not a safe filename\n";
             return 2;
         }
-        output_path =
-            std::filesystem::path(home) / ".local/share/platypus/models" / (model_id + ".gguf");
+        output_path = directory / (model_id + ".gguf");
     }
     int previous_percent = -1;
     auto downloaded =
@@ -191,13 +201,12 @@ int setup_command(std::filesystem::path &model_path, std::string &profile_path) 
         std::cout << "Setup cancelled. Use `platypus models list` to choose another model.\n";
         return 0;
     }
-    const auto *home = std::getenv("HOME");
-    if (!home) {
+    auto directory = default_model_directory();
+    if (directory.empty()) {
         std::cerr << "HOME is not set; use `platypus models download` with an explicit path.\n";
         return 1;
     }
-    model_path =
-        std::filesystem::path(home) / ".local/share/platypus/models" / (model.id + ".gguf");
+    model_path = directory / (model.id + ".gguf");
     auto downloaded =
         download_model(model, model_path, [&](std::uint64_t received, std::uint64_t total) {
             const auto percent = total == 0 ? 0 : static_cast<int>(received * 100 / total);
