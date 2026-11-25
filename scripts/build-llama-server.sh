@@ -37,6 +37,10 @@ if [[ "$(git -C "${llama_source}" remote get-url origin)" != "https://github.com
   exit 1
 fi
 if [[ "$(git -C "${llama_source}" rev-parse HEAD 2>/dev/null || true)" != "${llama_commit}" ]]; then
+  if [[ -n "$(git -C "${llama_source}" status --porcelain)" ]]; then
+    echo "Refusing to change a modified llama.cpp checkout at ${llama_source}" >&2
+    exit 1
+  fi
   git -C "${llama_source}" fetch --depth=1 origin "${llama_commit}"
   git -C "${llama_source}" checkout --detach "${llama_commit}"
 fi
