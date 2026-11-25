@@ -6,15 +6,15 @@
   approval for mutations and project-contained import paths.
 - [ ] Plan-first proposal flow with approve/edit/reject behavior.
 - [x] `/review` emits a bounded diff/plan bundle for the latest milestone baseline.
-- [ ] Record automated check results and decisions in reviews, copy bundles to clipboard, and
+- [ ] Persist automated check results and decisions in reviews, copy bundles to clipboard, and
   import review comments as new tasks.
-- [ ] Configurable automatic project checks with a three-attempt ceiling.
-- [ ] Token-bounded milestone review bundle and comment import.
+- [x] Detect CMake/Cargo/npm/Go/pytest checks, load `.platypus.toml` argv overrides, require
+  approval, return untrusted failures to the model, and cap repair attempts at three (ADR-021).
 - [ ] Optional remote providers with estimate-before-send and fake transport tests.
 - [ ] FakeBackend integration test for the full workflow cycle.
 - [x] Dev, ASan, and UBSan suites (9/9 each), benchmark tests (41/41), and formatter checks pass.
-  Focused clang-tidy found existing `SnapshotStore` copy/move, parameter, and integer-width
-  diagnostics; the new plan modules have no remaining focused-check findings.
+  Focused clang-tidy is not clean: it reports existing logger, registry, and `SnapshotStore`
+  warnings plus a stop-token-by-value convention warning in the new check API.
 
 Plan storage and basic interactive management are locally implemented. Plan-first execution,
 checks, review bundles, provider integration and the Phase 3 exit cycle remain incomplete. Track

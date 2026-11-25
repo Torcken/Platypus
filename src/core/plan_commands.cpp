@@ -110,7 +110,7 @@ std::optional<std::string> handle_plan_command(const std::string &input,
             bundle += "No workspace changes since the milestone baseline.\n";
         else
             bundle += diff.value();
-        bundle += "\n## Checks\n\nNo automatic project checks are recorded yet.\n";
+        bundle += "\n## Checks\n\nNo check results are stored in this plan yet.\n";
         bundle += "\n## Decisions\n\nNo milestone decisions are recorded yet.\n";
         if (bundle.size() > kMaxReviewBytes) {
             bundle.resize(kMaxReviewBytes - 32);

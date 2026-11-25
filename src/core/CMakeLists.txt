@@ -10,10 +10,12 @@ add_library(core STATIC
     ../agent/repository_map.cpp
     plan_store.cpp
     plan_commands.cpp
+    project_checks.cpp
     execution_engine.cpp
     ../session/store.cpp
 )
 
 target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(core PRIVATE ${tree_sitter_runtime_SOURCE_DIR}/lib/include)
-target_link_libraries(core PUBLIC llm util SQLite::SQLite3 tree_sitter_grammars)
+target_link_libraries(core PUBLIC llm util SQLite::SQLite3 tree_sitter_grammars
+    tomlplusplus::tomlplusplus)

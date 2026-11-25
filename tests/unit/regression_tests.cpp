@@ -4,6 +4,7 @@
 #include "core/execution_engine.hpp"
 #include "core/plan_commands.hpp"
 #include "core/plan_store.hpp"
+#include "core/project_checks.hpp"
 #include "llm/chat_formatter.hpp"
 #include "llm/fake_backend.hpp"
 #include "llm/tool_grammar.hpp"
@@ -165,7 +166,7 @@ TEST_CASE("Interactive plan commands validate and confirm plan mutations") {
     REQUIRE(review.has_value());
     REQUIRE(review->find("Milestone Review: Implement") != std::string::npos);
     REQUIRE(review->find("implementation.cpp") != std::string::npos);
-    REQUIRE(review->find("No automatic project checks") != std::string::npos);
+    REQUIRE(review->find("No check results are stored") != std::string::npos);
     REQUIRE(core::handle_plan_command("/done TASK-0001", store)->find("Completed") !=
             std::string::npos);
     REQUIRE(approvals == 3);
@@ -182,6 +183,96 @@ TEST_CASE("Plan storage rejects symlink destinations") {
     REQUIRE_FALSE(plans.load().is_ok());
     REQUIRE_FALSE(plans.save({{"Unsafe", {{"TASK-0001", "Do not overwrite", false}}, {}}}).is_ok());
     REQUIRE(read(outside.root / "PLAN.md") == "outside data");
+}
+TEST_CASE("Project checks detect supported manifests and run approved argv directly") {
+    Workspace workspace;
+    fs::create_directories(workspace.root / "build/dev");
+    std::ofstream(workspace.root / "CMakeLists.txt") << "project(sample)\n";
+    std::ofstream(workspace.root / "CMakePresets.json")
+        << R"({"version": 6, "configurePresets": [{"name": "dev"}], "buildPresets": [{"name": "dev"}], "testPresets": [{"name": "dev"}]})";
+    std::ofstream(workspace.root / "build/dev/CMakeCache.txt") << "configured";
+    std::ofstream(workspace.root / "Cargo.toml") << "[package]\nname='sample'\nversion='0.1.0'\n";
+    std::ofstream(workspace.root / "package.json") << R"({"scripts":{"test":"echo ok"}})";
+    std::ofstream(workspace.root / "go.mod") << "module sample\n";
+    std::ofstream(workspace.root / "pytest.ini") << "[pytest]\n";
+    auto detected = core::ProjectChecks::discover(workspace.root);
+    REQUIRE(detected.is_ok());
+    REQUIRE(detected.value().size() == 6);
+    REQUIRE(detected.value()[0].name == "CMake build (dev)");
+
+    std::ofstream(workspace.root / ".platypus.toml")
+        << "[checks]\ncommands = [{name='unit', argv=['python3', '-c', "
+           "\"print('check-ok')\"]}]\n";
+    auto overridden = core::ProjectChecks::discover(workspace.root);
+    REQUIRE(overridden.is_ok());
+    REQUIRE(overridden.value().size() == 1);
+    REQUIRE(overridden.value()[0].name == "unit");
+    std::string approval;
+    auto result = core::ProjectChecks::run(overridden.value()[0], workspace.root,
+                                           [&](const std::string &preview) {
+                                               approval = preview;
+                                               return true;
+                                           });
+    REQUIRE(result.is_ok());
+    REQUIRE(result.value().approved);
+    REQUIRE(result.value().process.exit_code == 0);
+    REQUIRE(result.value().process.output.find("check-ok") != std::string::npos);
+    REQUIRE(approval.find("python3") != std::string::npos);
+
+    auto declined = core::ProjectChecks::run(overridden.value()[0], workspace.root,
+                                             [](const auto &) { return false; });
+    REQUIRE(declined.is_ok());
+    REQUIRE_FALSE(declined.value().approved);
+
+    std::ofstream(workspace.root / ".platypus.toml") << "[checks]\ncommands=[]\n";
+    auto disabled = core::ProjectChecks::discover(workspace.root);
+    REQUIRE(disabled.is_ok());
+    REQUIRE(disabled.value().empty());
+}
+TEST_CASE("Project check overrides reject malformed and symlinked configuration") {
+    Workspace workspace, outside;
+    std::ofstream(workspace.root / ".platypus.toml")
+        << "[checks]\ncommands = [{name='bad', argv='not-an-array'}]\n";
+    REQUIRE_FALSE(core::ProjectChecks::discover(workspace.root).is_ok());
+    fs::remove(workspace.root / ".platypus.toml");
+    std::ofstream(outside.root / ".platypus.toml") << "[checks]\ncommands=[]\n";
+    fs::create_symlink(outside.root / ".platypus.toml", workspace.root / ".platypus.toml");
+    REQUIRE_FALSE(core::ProjectChecks::discover(workspace.root).is_ok());
+}
+TEST_CASE("Agent returns approved check failures for up to three repair attempts") {
+    Workspace workspace;
+    std::ofstream(workspace.root / ".platypus.toml") << R"toml([checks]
+commands = [{name = "unit", argv = ["python3", "-c", "import sys; print('check-failure'); sys.exit(7)"]}]
+)toml";
+    struct CapturingFake : llm::FakeBackend {
+        std::vector<std::vector<std::pair<std::string, std::string>>> prompts;
+        util::Result<std::vector<llm::ChatChunk>>
+        generate_chat(const std::vector<std::pair<std::string, std::string>> &messages, float temp,
+                      int max_tokens) override {
+            prompts.push_back(messages);
+            return llm::FakeBackend::generate_chat(messages, temp, max_tokens);
+        }
+    };
+    auto backend = std::make_shared<CapturingFake>();
+    backend->set_script("check-task", {"Working", "Still fixing", "Still fixing"});
+    std::size_t approvals = 0;
+    auto registry = std::make_shared<core::ToolRegistry>(workspace.root, [&](const auto &) {
+        ++approvals;
+        return true;
+    });
+    core::ExecutionEngine engine(backend, registry);
+    auto result = engine.run("check-task", 5);
+    REQUIRE_FALSE(result.is_ok());
+    REQUIRE(result.error().find("after three attempts") != std::string::npos);
+    REQUIRE(approvals == 3);
+    bool saw_untrusted_failure = false;
+    for (const auto &prompt : backend->prompts)
+        for (const auto &[role, content] : prompt)
+            if (role == "user" &&
+                content.find("Untrusted project-check output") != std::string::npos &&
+                content.find("check-failure") != std::string::npos)
+                saw_untrusted_failure = true;
+    REQUIRE(saw_untrusted_failure);
 }
 TEST_CASE("Workspace escape and symlink targets are rejected") {
     Workspace workspace, outside;
@@ -1115,7 +1206,8 @@ TEST_CASE("Agent blocks the fourth identical action and the model recovers") {
         R"({"tool_call":{"name":"probe","arguments":{"value":"different"}}})";
     backend->set_script("loop-guard-task",
                         {repeated, repeated, repeated, repeated, different, "Finished."});
-    auto registry = std::make_shared<core::ToolRegistry>();
+    Workspace workspace;
+    auto registry = std::make_shared<core::ToolRegistry>(workspace.root);
     int executions = 0;
     registry->register_tool(
         core::Tool{"probe", "Count a probe call.",
