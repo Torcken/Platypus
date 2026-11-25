@@ -31,8 +31,10 @@
   detected host facts, and verified downloader; source-tree and install catalog lookup are wired.
   A local Linux x86_64 source installer builds both Platypus and the pinned server; the installation
   guide documents CPU/CUDA/Vulkan choices. `platypus setup` now
-  recommends, downloads and verifies the selected model, loads its profile, and enters a managed
-  interactive session. Its full download/server path still needs a real-model installation test.
+  recommends, downloads and verifies the selected model, loads its profile, starts a managed server,
+  and runs a read-only README summary task before the interactive session. A failed sample task is
+  reported while setup still opens the session. Its full download/server/sample path still needs a
+  real-model installation test.
   The pinned-server build selects Metal, CUDA, Vulkan, or CPU from the build host by default;
   explicit backend overrides remain available. Homebrew formula, release updater, and assisted-free
   acceptance remain. A temporary-prefix Linux installer run built and installed both binaries; its
@@ -49,6 +51,8 @@
   installed Platypus binary and model catalog smoke check pass. Hosted CI outcomes and supported GPU
   execution remain unverified.
 - [x] Run all local verification presets: dev, ASan, UBSan (10/10 CTest tests each) and Python (41 tests).
+  Re-run after setup sample-task changes: all three CTest presets passed 10/10 and Python passed
+  41/41. Real-model execution of the setup sample remains unverified.
 - [ ] Document remote CI outcomes when supported-host workflows are available.
 - [ ] Human: verify unsupported-by-default installation on five machines, including AMD 6 GB,
   M1 16 GB, and Titan V.

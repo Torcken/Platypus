@@ -46,9 +46,10 @@ Manual endpoint mode remains available.
 ```
 
 `setup` is the interactive first-run path: it detects available hardware, recommends a catalog
-model, downloads and verifies it, loads its profile, and starts an interactive session with a
-managed loopback `llama-server`. It requires a terminal; use the `models` commands and `run`
-options directly for scripted or manual setup.
+model, downloads and verifies it, loads its profile, and starts a managed loopback `llama-server`.
+Before opening the interactive session, it runs a read-only task that summarizes `README.md`; if the
+sample cannot complete, setup reports that and still opens the session. It requires a terminal; use
+the `models` commands and `run` options directly for scripted or manual setup.
 
 An interactive terminal opens FTXUI; redirected input uses a line interface. Read/list/grep are
 read-only. Writes/edits and shell commands require explicit approval; `--yes` approves and logs

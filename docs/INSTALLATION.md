@@ -29,6 +29,9 @@ platypus models recommend --preference balanced
 platypus models download ornith-1.0-9b-q4_k_m
 ```
 
+Setup runs a read-only `README.md` summary task against the downloaded model before opening the
+interactive session. If the sample task fails, it reports the failure and continues to the session.
+
 For other environments, build from source using the commands in the README. The macOS build is
 covered by CI, but a Homebrew formula and assisted-free macOS setup have not yet been validated.
 Launch the pinned llama-server manually as described in ADR-002. Five-machine installation

@@ -232,7 +232,7 @@ int setup_command(std::filesystem::path &model_path, std::string &profile_path) 
         return 1;
     }
     profile_path = selected_profile.string();
-    std::cout << "Model verified. Starting an interactive session; Ctrl-C exits.\n";
+    std::cout << "Model verified. Testing it with a read-only sample task before the session.\n";
     return 0;
 }
 } // namespace
@@ -248,12 +248,14 @@ int main(int argc, char *argv[]) {
         std::string backend_name = "llama_server", endpoint = "http://127.0.0.1:8080", task;
         std::string server_executable = "llama-server";
         std::filesystem::path managed_model;
+        bool first_run_setup = false;
         if (argc > 1 && std::string_view(argv[1]) == "setup") {
             const int setup_result = setup_command(managed_model, profile_path);
             if (setup_result != 0)
                 return setup_result;
             if (managed_model.empty())
                 return 0;
+            first_run_setup = true;
         }
         auto root = std::filesystem::current_path();
         for (int i = 1; i < argc; ++i) {
@@ -409,9 +411,6 @@ int main(int argc, char *argv[]) {
         if (!attached.is_ok())
             throw std::runtime_error(attached.error());
         std::cerr << "Session " << session_id << '\n';
-        if (!headless && task.empty() && isatty(STDIN_FILENO) && isatty(STDOUT_FILENO))
-            return tui::run_terminal(engine, *tools, profile_path.empty() ? endpoint : profile_path,
-                                     steps, yes, direct);
         std::signal(SIGINT, interrupt);
         std::stop_source source;
         // C++ note: jthread joins before source is destroyed; no detached callbacks can outlive it.
@@ -463,6 +462,16 @@ int main(int argc, char *argv[]) {
             std::cout << result.value() << '\n';
             return 0;
         };
+        if (first_run_setup) {
+            std::cout << "Testing the model with a read-only README summary task.\n";
+            const int sample_result = execute(
+                "/direct Read README.md and give me a one-sentence summary. Do not modify files.");
+            if (sample_result != 0)
+                std::cerr << "The sample task did not complete; setup is ready for another try.\n";
+        }
+        if (!headless && task.empty() && isatty(STDIN_FILENO) && isatty(STDOUT_FILENO))
+            return tui::run_terminal(engine, *tools, profile_path.empty() ? endpoint : profile_path,
+                                     steps, yes, direct);
         if (!task.empty())
             return execute(task);
         if (headless)
