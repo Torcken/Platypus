@@ -47,9 +47,26 @@ for command in cmake git ninja; do
 done
 
 case "${backend}" in
-  cpu) backend_args=() ;;
-  cuda) backend_args=(-DGGML_CUDA=ON -DGGML_NATIVE=OFF) ;;
-  vulkan) backend_args=(-DGGML_VULKAN=ON) ;;
+  cpu)
+    backend_args=()
+    if [[ "$(uname -s)" == Darwin ]]; then
+      backend_args=(-DGGML_METAL=OFF)
+    fi
+    ;;
+  cuda)
+    if [[ "$(uname -s)" != Linux ]]; then
+      echo "The CUDA llama-server backend is supported only on Linux." >&2
+      exit 2
+    fi
+    backend_args=(-DGGML_CUDA=ON -DGGML_NATIVE=OFF)
+    ;;
+  vulkan)
+    if [[ "$(uname -s)" != Linux ]]; then
+      echo "The Vulkan llama-server backend is supported only on Linux." >&2
+      exit 2
+    fi
+    backend_args=(-DGGML_VULKAN=ON)
+    ;;
   metal)
     if [[ "$(uname -s)" != Darwin ]]; then
       echo "The Metal llama-server backend is available only on macOS." >&2
