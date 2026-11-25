@@ -22,7 +22,8 @@ int run_terminal(core::ExecutionEngine &engine, core::ToolRegistry &tools, const
     std::condition_variable_any answered;
     std::condition_variable_any plan_answered;
     std::string history = "Platypus — plan-first tasks; /direct <instruction> skips planning. "
-                          "/plan, /milestone, /task, /done, /import, /undo, or /quit\n";
+                          "/plan, /milestone, /task, /done, /decision, /review, /review --copy, "
+                          "/import, /review-import, /undo, or /quit\n";
     std::string input;
     std::string context_status = "Context: waiting for first request";
     bool busy = false, approving = false, planning = false;

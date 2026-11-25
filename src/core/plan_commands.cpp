@@ -1,6 +1,7 @@
 // Interactive plan commands share validation and approval rules across CLI and TUI.
 #include "plan_commands.hpp"
 #include "plan_store.hpp"
+#include "platform/clipboard.hpp"
 #include "project_checks.hpp"
 #include "review_store.hpp"
 #include <algorithm>
@@ -121,14 +122,15 @@ std::optional<std::string> handle_plan_command(const std::string &input,
             response += "- " + id + "\n";
         return response;
     }
-    if (input == "/review" || input.starts_with("/review ")) {
+    if (input == "/review" || input == "/review --copy" || input.starts_with("/review ")) {
+        const bool copy_bundle = input == "/review --copy";
         auto loaded = plan.load();
         if (!loaded.is_ok())
             return failure(loaded.error());
         if (loaded.value().empty())
             return failure("create a milestone before requesting a review");
         std::size_t index = loaded.value().size() - 1;
-        if (input != "/review") {
+        if (input != "/review" && !copy_bundle) {
             auto number = input.substr(8);
             std::size_t selected = 0;
             auto parsed = std::from_chars(number.data(), number.data() + number.size(), selected);
@@ -188,6 +190,14 @@ std::optional<std::string> handle_plan_command(const std::string &input,
             if (last_line != std::string::npos)
                 bundle.resize(last_line + 1);
             bundle += "\n[Review bundle truncated]\n";
+        }
+        if (copy_bundle) {
+            if (!workspace.confirm("Copy this milestone review bundle to the system clipboard?"))
+                return bundle + "\nClipboard copy declined.\n";
+            auto copied = platform::copy_text(bundle);
+            if (!copied.is_ok())
+                return bundle + "\nClipboard copy failed: " + copied.error() + "\n";
+            bundle += "\nCopied review bundle to clipboard.\n";
         }
         return bundle;
     }

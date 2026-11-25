@@ -12,7 +12,8 @@
   bundles (ADR-021).
 - [x] Record milestone decisions in private `.platypus` metadata and import approved Markdown
   review bullets as unchecked tasks.
-- [ ] Copy review bundles to the clipboard.
+- [x] `/review --copy` asks before using desktop clipboard helpers; plain-text provider input is
+  capped at 64 KiB (ADR-023).
 - [x] Detect CMake/Cargo/npm/Go/pytest checks, load `.platypus.toml` argv overrides, require
   approval, return untrusted failures to the model, and cap repair attempts at three (ADR-021).
 - [ ] Optional remote providers with estimate-before-send and fake transport tests.
@@ -22,7 +23,6 @@
   Focused clang-tidy is not clean: it reports logger enum/stream, registry vector-growth,
   `SnapshotStore`/backend/engine stop-token, and TUI event-parameter suggestions.
 
-Plan storage and basic interactive management are locally implemented. Plan-first execution,
-checks, review bundles, provider integration and the Phase 3 exit cycle remain incomplete. Track
-external model/provider and human workflow evidence separately from offline implementation and
-tests.
+The full offline Phase 3 integration cycle is implemented and verified. Clipboard provider
+availability and real-model proposal quality require platform/model checks; optional remote review
+providers remain unimplemented.

@@ -18,4 +18,5 @@ confirmation, and atomically adds the comments as unchecked tasks to the latest 
 
 Decision records are bounded, validated, and atomically replaced. Comment imports reject symlinks,
 path traversal, malformed lines, and oversized batches; imported text is stored as data and is never
-executed. Clipboard integration and external review-provider quality remain open.
+executed. `/review --copy` asks for confirmation before using a platform clipboard helper with a
+64 KiB cap. External review-provider quality remains open.

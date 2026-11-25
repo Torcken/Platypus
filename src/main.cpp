@@ -191,7 +191,8 @@ int main(int argc, char *argv[]) {
         if (headless)
             throw std::runtime_error("Headless mode requires an instruction");
         std::cout << "Platypus — plan-first tasks; /direct <instruction> skips planning. "
-                     "/plan, /milestone, /task, /done, /import, /undo, /quit\n";
+                     "/plan, /milestone, /task, /done, /decision, /review, /review --copy, "
+                     "/import, /review-import, /undo, /quit\n";
         while (!source.stop_requested()) {
             std::cout << "> " << std::flush;
             if (!std::getline(std::cin, task) || task == "/quit")

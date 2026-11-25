@@ -48,9 +48,10 @@ The interactive plan commands manage a validated, project-local `PLAN.md`: `/pla
 `/done TASK-0001` completes one, `/decision <text>` records a milestone decision, `/review` prints
 a bounded review bundle, `/import <relative-markdown-file>` previews a plan before merging, and
 `/review-import <relative-markdown-file>` previews Markdown bullets before adding them as unchecked
-tasks to the latest milestone. Import paths must stay inside the project and cannot traverse
-symlinks. Latest-task check statuses, exit codes, and milestone decisions appear in the bundle.
-Copying review bundles to the clipboard is still being implemented.
+tasks to the latest milestone. `/review --copy` asks before copying the bundle to the desktop
+clipboard. Import paths must stay inside the project and cannot traverse symlinks. Latest-task
+check statuses, exit codes, and milestone decisions appear in the bundle. Clipboard copying uses
+`wl-copy`, `xclip`, or `xsel` on Linux and `pbcopy` on macOS.
 
 Project checks run after the model finishes a task and require approval. Platypus detects CMake,
 Cargo, npm, Go, and configured pytest projects; `.platypus.toml` can replace detection with direct

@@ -9,6 +9,7 @@
 #include "llm/chat_formatter.hpp"
 #include "llm/fake_backend.hpp"
 #include "llm/tool_grammar.hpp"
+#include "platform/clipboard.hpp"
 #include "platform/process.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
@@ -276,6 +277,19 @@ TEST_CASE("Review decisions are keyed by baseline and reject symlink files") {
         reviews.add_decision(std::string(40, 'c'), "Do not write through symlink").is_ok());
     REQUIRE(read(outside.root / "decisions.json") == "outside data");
 }
+TEST_CASE("Clipboard provider receives bounded review text through stdin") {
+    Workspace workspace;
+    auto output = workspace.root / "clipboard.txt";
+    auto result = platform::copy_text_with_command(
+        {"python3", "-c",
+         "import pathlib,sys; pathlib.Path(sys.argv[1]).write_bytes(sys.stdin.buffer.read())",
+         output.string()},
+        "# Review bundle\nApproved text\n");
+    REQUIRE(result.is_ok());
+    REQUIRE(read(output) == "# Review bundle\nApproved text\n");
+    REQUIRE_FALSE(
+        platform::copy_text_with_command({"python3"}, std::string(64 * 1024 + 1, 'x')).is_ok());
+}
 TEST_CASE("Interactive plan commands validate and confirm plan mutations") {
     Workspace workspace;
     std::size_t approvals = 0;
@@ -343,6 +357,10 @@ commands = [{name="unit", argv=["python3", "-c", "print('unit check passed')"]}]
     REQUIRE(review->find("implementation.cpp") != std::string::npos);
     REQUIRE(review->find("\"unit\": passed (exit 0)") != std::string::npos);
     REQUIRE(review->find("Keep the public API stable") != std::string::npos);
+    safety::SnapshotStore clipboard_denied(workspace.root, [](const auto &) { return false; });
+    auto declined_copy = core::handle_plan_command("/review --copy", clipboard_denied);
+    REQUIRE(declined_copy.has_value());
+    REQUIRE(declined_copy->find("Clipboard copy declined") != std::string::npos);
 
     std::ofstream(workspace.root / "review-comments.md")
         << "# Follow-up\n- Cover a missing configuration\n- Add a regression test\n";

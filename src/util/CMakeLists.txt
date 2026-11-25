@@ -5,6 +5,7 @@ add_library(util STATIC
     util.cpp
     ../safety/snapshot_store.cpp
     ../platform/process.cpp
+    ../platform/clipboard.cpp
 )
 
 target_include_directories(util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
