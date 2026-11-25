@@ -12,8 +12,8 @@
 - [ ] Implement resumable, bounded HTTPS downloads with progress and SHA-256 checks.
   In progress: catalog-only Hugging Face HTTPS URLs, size cap, resumable `.part` files, HTTPS-only
   redirects, progress and cancellation callbacks, OpenSSL SHA-256 verification, and atomic
-  no-overwrite finalization are implemented with offline transfer-seam tests. Setup and UI wiring
-  remain.
+  no-overwrite finalization are implemented with offline transfer-seam tests and wired into both
+  `models download` and `setup`. Full real-model download acceptance remains.
 - [ ] Manage the pinned llama-server lifecycle, readiness, bounded OOM restart, and shutdown.
   In progress: reproc-backed child ownership, loopback-only launch, bounded readiness polling,
   explicit bounded OOM recovery by the caller (each restart halves context to a configured floor),
