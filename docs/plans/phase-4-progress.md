@@ -41,9 +41,10 @@
   The pinned-server build selects Metal, CUDA, Vulkan, or CPU from the build host by default;
   explicit backend overrides remain available. The canonical source URL is
   `https://github.com/Torcken/Platypus` and is recorded in CMake metadata and installation docs.
-  Remote reads currently fail because no valid GitHub credential is available; tags and release
-  assets are not yet verified. Homebrew formula and release updater still need a verified tag and
-  release asset layout.
+  Authenticated SSH inspection found remote `main` contains only the initial README/LICENSE commit;
+  it has no tags or releases. This `phase-4` development branch remains local and unpushed. Homebrew
+  formula and updater therefore need a release workflow, a published version tag, and verified
+  release asset layout before they can be made installable.
   Assisted-free acceptance remains. A temporary-prefix Linux installer run built and installed both
   binaries; its
   smoke wrapper stopped because it compared llama-server's `1.0.0-dev` version label with Platypus's
