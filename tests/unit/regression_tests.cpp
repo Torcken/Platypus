@@ -359,14 +359,17 @@ TEST_CASE("Managed llama-server fails closed when the child exits before readine
         }
         void stop() noexcept override {}
     };
+    auto launches = std::make_shared<unsigned int>(0);
     platform::ServerManager manager(
         {"llama-server", "model.gguf", 8124, 32768, 4096, std::chrono::milliseconds(1000), 1},
-        [](const auto &) {
+        [launches](const auto &) {
+            ++*launches;
             std::shared_ptr<platform::ServerProcess> process = std::make_shared<ExitedProcess>();
             return util::Result<std::shared_ptr<platform::ServerProcess>>::ok(std::move(process));
         },
         [](const auto &) { return false; });
     REQUIRE_FALSE(manager.start().is_ok());
+    REQUIRE(*launches == 1);
 }
 TEST_CASE("Managed llama-server reduces context after a reported startup OOM") {
     struct FakeProcess final : platform::ServerProcess {
