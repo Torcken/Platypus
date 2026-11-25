@@ -2,6 +2,18 @@
   "version": 1,
   "models": [
     {
+      "id": "gemma-4-12b-q4_0",
+      "display_name": "Gemma 4 12B Q4_0",
+      "quantization": "Q4_0",
+      "url": "https://huggingface.co/ggml-org/gemma-4-12B-it-GGUF/resolve/790d826c6ec7dc8aa0ab23af33e5b8313140a231/gemma-4-12B-it-Q4_0.gguf",
+      "sha256": "3712b9bd32cae83a22f67ee7a4466d8d7a4f21646ac8a07d19bf9418e8767a70",
+      "size_hint_bytes": 7219673216,
+      "minimum_memory_bytes": 12884901888,
+      "minimum_gpu_memory_bytes": 8589934592,
+      "profile": "profiles/gemma-4.toml",
+      "ranks": { "fast": null, "balanced": 1, "quality": 3 }
+    },
+    {
       "id": "ornith-1.0-9b-q4_k_m",
       "display_name": "Ornith 1.0 9B Q4_K_M",
       "quantization": "Q4_K_M",

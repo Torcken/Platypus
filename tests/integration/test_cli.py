@@ -16,6 +16,7 @@ models = subprocess.run([binary, "models", "list", "--catalog", str(catalog)],
                         capture_output=True, text=True, timeout=10)
 assert models.returncode == 0, models.stderr
 assert "ornith-1.0-9b-q4_k_m" in models.stdout
+assert "gemma-4-12b-q4_0" in models.stdout
 assert "GiB" in models.stdout
 setup = subprocess.run([binary, "setup"], capture_output=True, text=True, timeout=10)
 assert setup.returncode == 2

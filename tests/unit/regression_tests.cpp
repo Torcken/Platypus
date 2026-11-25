@@ -168,7 +168,7 @@ TEST_CASE("Model catalog validates pinned artifacts and ranks hardware-compatibl
     const auto maintained =
         platform::parse_model_catalog(read(project_root / "profiles/catalog.json"));
     REQUIRE(maintained.is_ok());
-    REQUIRE(maintained.value().models.size() == 4);
+    REQUIRE(maintained.value().models.size() == 5);
     const auto gib = std::uint64_t{1024} * 1024 * 1024;
     const auto hash = std::string(64, 'a');
     auto model = [&](std::string id, std::string quant, std::uint64_t size, std::uint64_t memory,
@@ -203,6 +203,10 @@ TEST_CASE("Model catalog validates pinned artifacts and ranks hardware-compatibl
     REQUIRE(platform::recommend_model(catalog.value(), modest, platform::ModelPreference::balanced)
                 .value()
                 .id == "fast-q4");
+    REQUIRE(platform::recommend_model(maintained.value(), {16 * gib, 12 * gib},
+                                      platform::ModelPreference::balanced)
+                .value()
+                .id == "gemma-4-12b-q4_0");
     REQUIRE_FALSE(
         platform::recommend_model(catalog.value(), modest, platform::ModelPreference::quality)
             .is_ok());

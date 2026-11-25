@@ -2,8 +2,9 @@
 
 - [x] Resolve Windows v1.0 support before platform work (ADR-025).
 - [x] Define catalog v1, validate pinned HF artifacts and SHA-256 values, and test deterministic
-  RAM/VRAM-aware fast/balanced/quality ranking (ADR-026). The memory floors and ranks remain
-  estimates pending hardware and model-quality evidence.
+  RAM/VRAM-aware fast/balanced/quality ranking (ADR-026, ADR-030). The catalog includes four
+  Ornith 1.0 variants and Gemma 4 12B Q4_0. Memory floors and ranks remain estimates pending
+  hardware and model-quality evidence.
 - [ ] Add Linux/macOS CPU, memory, GPU architecture, and VRAM detection with graceful fallbacks.
   In progress: CPU/RAM and architecture inventory, optional Vulkan device-local heap probe, Linux
   DRM VRAM fallback, NVML NVIDIA name/architecture/VRAM probing, deterministic primary-GPU choice,
