@@ -6,8 +6,9 @@ The current milestone restores a working headless/terminal core and a measured b
 
 ## Build and test
 
-Requires CMake 3.24+, Ninja, a C++20 compiler with std::jthread, Python 3.11+, Git, libcurl and
-SQLite development packages. CPM fetches pinned JSON, Catch2 v3, toml++, reproc and FTXUI sources.
+Requires CMake 3.24+, Ninja, a C++20 compiler with std::jthread, Python 3.11+, Git, libcurl,
+OpenSSL Crypto, and SQLite development packages. CPM fetches pinned JSON, Catch2 v3, toml++, reproc
+and FTXUI sources.
 The `grep` tool additionally requires ripgrep (`rg`) on `PATH` at runtime.
 
 ```sh
@@ -22,7 +23,10 @@ need network access; cached builds and fixture tests run without external servic
 
 ## Run locally
 
-Start your llama-server separately, using the release pinned in ADR-002.
+Start your llama-server separately, using the release pinned in ADR-002. Model commands read the
+versioned catalog in `profiles/catalog.json`; set `PLATYPUS_MODEL_CATALOG` to use another catalog.
+Downloads go to `~/.local/share/platypus/models/` by default and are size and SHA-256 verified
+before finalization.
 
 ```sh
 ./build/dev/platypus
@@ -30,6 +34,9 @@ Start your llama-server separately, using the release pinned in ADR-002.
 ./build/dev/platypus --profile profiles/ornith-1.0.toml
 ./build/dev/platypus --resume 1
 ./build/dev/platypus undo --project /path/to/repo
+./build/dev/platypus models list
+./build/dev/platypus models recommend --preference balanced
+./build/dev/platypus models download ornith-1.0-9b-q4_k_m
 ```
 
 An interactive terminal opens FTXUI; redirected input uses a line interface. Read/list/grep are
@@ -86,6 +93,7 @@ untrusted output for up to three repair attempts.
 ## Project documentation
 
 Read `SESSION_PROMPT.md`, `CLAUDE.md`, `docs/ROADMAP.md`, then accepted ADRs in `docs/decisions/`.
+[Installation](docs/INSTALLATION.md) documents the current Linux source installer and model setup.
 [Architecture](docs/ARCHITECTURE.md) explains the current modules.
 [Benchmark guide](bench/README.md) documents five verified task fixtures and edit experiments.
 [Development progress](docs/plans/phase-stabilization-progress.md) records the resumption milestone.

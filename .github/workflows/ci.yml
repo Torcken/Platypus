@@ -18,7 +18,7 @@ jobs:
         with: {python-version: '3.11'}
       - name: Linux prerequisites
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ninja-build clang libcurl4-openssl-dev libsqlite3-dev
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang libcurl4-openssl-dev libsqlite3-dev libssl-dev
       - name: GCC toolchain
         if: matrix.compiler == 'gcc'
         run: |
@@ -32,12 +32,12 @@ jobs:
       - name: macOS toolchain
         if: runner.os == 'macOS'
         run: |
-          brew install llvm ninja curl sqlite
+          brew install llvm ninja curl sqlite openssl@3
           echo "CC=$(brew --prefix llvm)/bin/clang" >> "$GITHUB_ENV"
           echo "CXX=$(brew --prefix llvm)/bin/clang++" >> "$GITHUB_ENV"
           echo 'CXXFLAGS=-stdlib=libc++' >> "$GITHUB_ENV"
           echo "LDFLAGS=-L$(brew --prefix llvm)/lib/c++ -Wl,-rpath,$(brew --prefix llvm)/lib/c++" >> "$GITHUB_ENV"
-          echo "CMAKE_PREFIX_PATH=$(brew --prefix curl);$(brew --prefix sqlite)" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix curl);$(brew --prefix sqlite);$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
       - run: cmake --preset ${{ matrix.preset }}
       - run: cmake --build --preset ${{ matrix.preset }}
       - run: ctest --preset ${{ matrix.preset }} --output-on-failure
@@ -47,7 +47,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Fuzz prerequisites
-        run: sudo apt-get update && sudo apt-get install -y ninja-build clang libclang-rt-dev libcurl4-openssl-dev libsqlite3-dev
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang libclang-rt-dev libcurl4-openssl-dev libsqlite3-dev libssl-dev
       - name: Configure instrumented fuzz targets
         run: >-
           cmake -S . -B build/fuzz -G Ninja -DCMAKE_C_COMPILER=clang
