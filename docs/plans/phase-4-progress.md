@@ -4,7 +4,8 @@
 - [x] Define catalog v1, validate pinned HF artifacts and SHA-256 values, and test deterministic
   RAM/VRAM-aware fast/balanced/quality ranking (ADR-026, ADR-030). The catalog includes four
   Ornith 1.0 variants and Gemma 4 12B Q4_0. Memory floors and ranks remain estimates pending
-  hardware and model-quality evidence.
+  hardware and model-quality evidence. On the current host, the CLI recommends Ornith Q4_K_M for
+  fast and balanced, and reports that no quality model fits.
 - [ ] Add Linux/macOS CPU, memory, GPU architecture, and VRAM detection with graceful fallbacks.
   In progress: CPU/RAM and architecture inventory, optional Vulkan device-local heap probe, Linux
   DRM VRAM fallback, NVML NVIDIA name/architecture/VRAM probing, deterministic primary-GPU choice,
