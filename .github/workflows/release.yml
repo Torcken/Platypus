@@ -1,0 +1,139 @@
+name: private release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install verification dependencies
+        run: sudo apt-get update && sudo apt-get install -y ninja-build g++ libcurl4-openssl-dev libsqlite3-dev libssl-dev
+      - run: cmake --preset dev
+      - run: cmake --build --preset dev --parallel 2
+      - run: ctest --preset dev --output-on-failure
+      - run: python3 -m unittest discover -s bench/tests -v
+      - run: python3 -m unittest discover -s tests/update -v
+  build:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - linux-x86_64-cpu
+          - linux-x86_64-vulkan
+          - linux-x86_64-cuda12
+          - linux-x86_64-cuda13
+          - macos-arm64-metal
+    runs-on: ${{ startsWith(matrix.target, 'macos') && 'macos-14' || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Check tag matches project version
+        run: |
+          version="$(python3 -c 'import re; s=open("CMakeLists.txt").read(); print(re.search(r"project\(platypus VERSION ([^ ]+)", s).group(1))')"
+          test "${GITHUB_REF_NAME#v}" = "$version"
+      - name: Linux build dependencies
+        if: startsWith(matrix.target, 'linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build g++ libcurl4-openssl-dev libsqlite3-dev libssl-dev
+          if [[ '${{ matrix.target }}' == *-vulkan ]]; then
+            sudo apt-get install -y libvulkan-dev glslc spirv-headers
+          fi
+      - name: macOS build dependencies
+        if: startsWith(matrix.target, 'macos')
+        run: |
+          test "$(uname -m)" = arm64
+          brew install llvm ninja curl sqlite openssl@3
+          echo "CC=$(brew --prefix llvm)/bin/clang" >> "$GITHUB_ENV"
+          echo "CXX=$(brew --prefix llvm)/bin/clang++" >> "$GITHUB_ENV"
+          echo 'CXXFLAGS=-stdlib=libc++' >> "$GITHUB_ENV"
+          echo "LDFLAGS=-L$(brew --prefix llvm)/lib/c++ -Wl,-rpath,$(brew --prefix llvm)/lib/c++" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix curl);$(brew --prefix sqlite);$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+      - name: Build and install Platypus
+        run: |
+          prefix="$RUNNER_TEMP/platypus-prefix"
+          build="$RUNNER_TEMP/platypus-client-build"
+          cmake -S . -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$prefix"
+          cmake --build "$build" --parallel 2
+          cmake --install "$build"
+          echo "PLATYPUS_PREFIX=$prefix" >> "$GITHUB_ENV"
+      - name: Build pinned Linux CPU or Vulkan server
+        if: matrix.target == 'linux-x86_64-cpu' || matrix.target == 'linux-x86_64-vulkan'
+        run: |
+          backend=cpu
+          if [[ '${{ matrix.target }}' == *-vulkan ]]; then backend=vulkan; fi
+          PLATYPUS_LLAMA_BACKEND="$backend" PLATYPUS_RELEASE_TARGET='${{ matrix.target }}' \
+            PLATYPUS_INSTALL_PREFIX="$PLATYPUS_PREFIX" \
+            PLATYPUS_BUILD_DIR="$RUNNER_TEMP/platypus-server-build" \
+            PLATYPUS_BUILD_JOBS=2 scripts/build-llama-server.sh
+      - name: Build pinned Linux CUDA server
+        if: contains(matrix.target, 'cuda')
+        run: |
+          version=12.9.1
+          image=nvidia/cuda:12.9.1-devel-ubuntu24.04
+          backend_target=linux-x86_64-cuda12
+          if [[ '${{ matrix.target }}' == *cuda13 ]]; then
+            version=13.0.0
+            image=nvidia/cuda:13.0.0-devel-ubuntu24.04
+            backend_target=linux-x86_64-cuda13
+          fi
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --volume "$RUNNER_TEMP:/runner-temp" \
+            --workdir /workspace \
+            --env PLATYPUS_CUDA_VERSION="$version" \
+            --env PLATYPUS_RELEASE_TARGET="$backend_target" \
+            --env PLATYPUS_INSTALL_PREFIX=/runner-temp/platypus-prefix \
+            --env PLATYPUS_BUILD_DIR="/runner-temp/platypus-server-build-$version" \
+            "$image" bash -ec '
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                ca-certificates git cmake ninja-build g++ libssl-dev
+              PLATYPUS_LLAMA_BACKEND=cuda PLATYPUS_BUILD_JOBS=2 \
+                scripts/build-llama-server.sh
+            '
+      - name: Build pinned macOS Metal server
+        if: matrix.target == 'macos-arm64-metal'
+        run: |
+          PLATYPUS_LLAMA_BACKEND=metal PLATYPUS_RELEASE_TARGET='${{ matrix.target }}' \
+            PLATYPUS_INSTALL_PREFIX="$PLATYPUS_PREFIX" \
+            PLATYPUS_BUILD_DIR="$RUNNER_TEMP/platypus-server-build" \
+            PLATYPUS_BUILD_JOBS=2 scripts/build-llama-server.sh
+      - name: Package release bundle
+        run: |
+          mkdir -p "$RUNNER_TEMP/platypus-release"
+          python3 scripts/package_release.py '${{ matrix.target }}' "$PLATYPUS_PREFIX" \
+            "$RUNNER_TEMP/platypus-release"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ runner.temp }}/platypus-release/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: downloaded-artifacts
+      - name: Publish private GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir release-assets
+          find downloaded-artifacts -type f -name 'platypus-*.tar.gz' \
+            -exec cp '{}' release-assets/ \;
+          test "$(find release-assets -type f -name 'platypus-*.tar.gz' | wc -l)" -eq 5
+          (cd release-assets && sha256sum platypus-*.tar.gz > SHA256SUMS)
+          gh release create "$GITHUB_REF_NAME" release-assets/* \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes

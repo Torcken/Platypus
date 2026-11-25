@@ -6,11 +6,13 @@
 #include "platform/hardware.hpp"
 #include "platform/model_catalog.hpp"
 #include "platform/model_download.hpp"
+#include "platform/process.hpp"
 #include "platform/server_manager.hpp"
 #include "tui/terminal.hpp"
 #include <algorithm>
 #include <cctype>
 #include <csignal>
+#include <cstdint>
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
@@ -18,9 +20,49 @@
 #include <sstream>
 #include <thread>
 #include <unistd.h>
+#include <vector>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 namespace {
 volatile std::sig_atomic_t interrupted = 0;
 void interrupt(int) { interrupted = 1; }
+
+int update_command(const char *argument_zero) {
+    std::filesystem::path executable;
+#ifdef __linux__
+    char buffer[4096]{};
+    const auto length = readlink("/proc/self/exe", buffer, sizeof(buffer) - 1);
+    if (length > 0)
+        executable = std::string(buffer, static_cast<std::size_t>(length));
+#elif defined(__APPLE__)
+    std::uint32_t length = 0;
+    _NSGetExecutablePath(nullptr, &length);
+    std::vector<char> buffer(length);
+    if (length > 0 && _NSGetExecutablePath(buffer.data(), &length) == 0)
+        executable = std::filesystem::weakly_canonical(buffer.data());
+#endif
+    if (executable.empty())
+        executable = std::filesystem::absolute(argument_zero);
+    executable = std::filesystem::weakly_canonical(executable);
+    const auto installed_script =
+        executable.parent_path().parent_path() / "libexec/platypus/update.py";
+    const std::filesystem::path source_script(PLATYPUS_SOURCE_UPDATE_SCRIPT_PATH);
+    const auto script =
+        std::filesystem::is_regular_file(installed_script) ? installed_script : source_script;
+    if (!std::filesystem::is_regular_file(script)) {
+        std::cerr << "Cannot locate the Platypus update helper. Reinstall Platypus first.\n";
+        return 1;
+    }
+    auto result = platypus::platform::run_process(
+        {"python3", script.string()}, std::filesystem::current_path(), std::chrono::hours(1), 8000);
+    if (!result.is_ok()) {
+        std::cerr << result.error() << '\n';
+        return 1;
+    }
+    std::cout << result.value().output;
+    return result.value().exit_code;
+}
 
 std::filesystem::path model_catalog_path() {
     if (const auto *configured = std::getenv("PLATYPUS_MODEL_CATALOG"))
@@ -239,6 +281,13 @@ int setup_command(std::filesystem::path &model_path, std::string &profile_path) 
 int main(int argc, char *argv[]) {
     using namespace platypus;
     try {
+        if (argc > 1 && std::string_view(argv[1]) == "update") {
+            if (argc != 2) {
+                std::cerr << "Usage: platypus update\n";
+                return 2;
+            }
+            return update_command(argv[0]);
+        }
         if (argc > 1 && std::string_view(argv[1]) == "models")
             return models_command(argc, argv);
         bool headless = false, yes = false, undo = false, resume = false, direct = false;
@@ -267,18 +316,20 @@ int main(int argc, char *argv[]) {
             };
             if (argument == "--help" || argument == "-h") {
                 std::cout
-                    << "Platypus 0.1.0\nUsage: platypus run [--headless] [--yes] [--direct] "
+                    << "Platypus " << PLATYPUS_VERSION
+                    << "\nUsage: platypus run [--headless] [--yes] [--direct] "
                        "[--project DIR] "
                        "[--endpoint URL] [--max-steps N] instruction\n"
                        "       platypus undo [--yes] [--project DIR]\nWithout an instruction, "
                        "starts an interactive session. /undo restores the latest snapshot.\n"
                        "       platypus setup  (interactive first-run setup)\n"
                        "       platypus models list|recommend|download MODEL_ID\n"
+                       "       platypus update  (update from the latest GitHub Release)\n"
                        "       platypus run --managed-model FILE [--server-bin PATH] instruction\n";
                 return 0;
             }
             if (argument == "--version") {
-                std::cout << "0.1.0\n";
+                std::cout << PLATYPUS_VERSION << '\n';
                 return 0;
             }
             if (argument == "run")

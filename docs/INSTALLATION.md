@@ -46,3 +46,19 @@ assisted-free setup on real macOS hardware have not yet been validated.
 Launch the pinned llama-server manually as described in ADR-002. Five-machine installation
 acceptance, including AMD 6 GB, M1 16 GB, and Titan V hardware, is a human exit criterion and remains
 open.
+
+## Private beta updates
+
+Version-tagged releases are private while the repository is private. Sign in with GitHub CLI on
+each machine (`gh auth login --hostname github.com`) or provide a short-lived `GH_TOKEN` with access
+to the repository's releases (a fine-grained token needs repository Contents read access), then run:
+
+```sh
+platypus update
+```
+
+The updater selects the installed OS/backend bundle, verifies its SHA-256, and updates the client,
+server, updater, catalog, and profiles. It does not touch downloaded models or project files. Linux x86_64
+supports CPU, Vulkan, CUDA 12, and CUDA 13 release bundles; macOS arm64 supports Metal. A local
+macOS CPU-only source build is supported, but the private release channel currently publishes Metal
+bundles only.

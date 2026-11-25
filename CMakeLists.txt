@@ -122,7 +122,9 @@ add_subdirectory(src/core)
 add_executable(platypus src/main.cpp src/tui/terminal.cpp)
 target_link_libraries(platypus PRIVATE core ftxui::component ftxui::dom ftxui::screen)
 target_compile_definitions(platypus PRIVATE
+    PLATYPUS_VERSION="${PROJECT_VERSION}"
     PLATYPUS_SOURCE_CATALOG_PATH="${PROJECT_SOURCE_DIR}/profiles/catalog.json"
+    PLATYPUS_SOURCE_UPDATE_SCRIPT_PATH="${PROJECT_SOURCE_DIR}/scripts/update.py"
     PLATYPUS_INSTALL_CATALOG_PATH="${CMAKE_INSTALL_FULL_DATADIR}/platypus/profiles/catalog.json")
 if(APPLE)
     set_target_properties(platypus PROPERTIES
@@ -133,6 +135,7 @@ else()
 endif()
 install(TARGETS platypus RUNTIME DESTINATION bin)
 install(DIRECTORY profiles/ DESTINATION ${CMAKE_INSTALL_DATADIR}/platypus/profiles)
+install(PROGRAMS scripts/update.py DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/platypus)
 find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
 include(CTest)
 if(BUILD_TESTING)

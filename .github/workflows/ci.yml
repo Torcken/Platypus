@@ -42,6 +42,9 @@ jobs:
       - run: cmake --build --preset ${{ matrix.preset }}
       - run: ctest --preset ${{ matrix.preset }} --output-on-failure
       - run: python3 -m unittest discover -s bench/tests -v
+      - name: Private release updater tests
+        if: matrix.compiler == 'gcc' && matrix.preset == 'dev'
+        run: python3 -m unittest discover -s tests/update -v
       - name: Install from source on macOS
         if: runner.os == 'macOS'
         run: |

@@ -29,7 +29,8 @@
   before any streamed output escapes (ADR-033). Fake HTTP/process tests cover retry bounds and
   partial-stream no-replay. Real-model OOM reproduction, GPU server builds, and hosted CI remain
   unverified.
-- [ ] Add setup wizard, Linux installer, Homebrew formula, update command, and distribution docs.
+- [ ] Complete setup wizard, source installers, private release/update path, Homebrew formula, and
+  distribution docs.
   In progress: `platypus models list`, `recommend`, and `download` use the validated catalog,
   detected host facts, and verified downloader; source-tree and install catalog lookup are wired.
   The Linux x86_64 installer has passed a local temporary-prefix build and install. A macOS arm64
@@ -42,28 +43,34 @@
   The pinned-server build selects Metal, CUDA, Vulkan, or CPU from the build host by default;
   explicit backend overrides remain available. The canonical source URL is
   `https://github.com/Torcken/Platypus` and is recorded in CMake metadata and installation docs.
-  Human decision: keep the repository private until Platypus is production grade. Authenticated SSH
+  Private versioned release bundles and `platypus update` are implemented for Linux CPU, Vulkan,
+  CUDA 12/13, and macOS Metal. The release workflow gates publishing on Linux verification, checks
+  the project tag, packages each target, emits SHA-256 checksums, and publishes the assets; offline
+  tests cover archive validation and rollback. The tag workflow and a real private release have not
+  yet run. Human decision: keep the
+  repository private until Platypus is production grade. Authenticated SSH
   inspection found remote `main` contains only the initial README/LICENSE commit, with no tags or
-  releases. This `phase-4` development branch remains local and unpushed. Public releases, Homebrew,
-  and the updater are deferred until the production release path is approved; private contributors
-  can install from an authorized source checkout.
+  releases. This `phase-4` development branch remains local and unpushed. Homebrew and assisted-free
+  macOS setup remain open; private contributors can install from an authorized source checkout and
+  beta users can update from an authorized private release.
   Assisted-free acceptance remains. A temporary-prefix Linux installer run built and installed both
   binaries; its
   smoke wrapper stopped because it compared llama-server's `1.0.0-dev` version label with Platypus's
   `0.1.0`. Direct CLI checks pass: `platypus --version` prints `0.1.0`, and `platypus models list`
   lists all five catalog entries. The CI install/catalog assertions also pass locally against a
   temporary prefix using the dev build.
-- [ ] Extend CI for the supported Linux/macOS release targets and supported backend builds.
+- [ ] Validate CI for the supported Linux/macOS release targets and supported backend builds.
   Existing Linux GCC/Clang/sanitizer and macOS arm64 jobs now provision OpenSSL Crypto; an optional
   Linux Vulkan job builds the pinned server with Vulkan; CUDA 12.9.1 and CUDA 13.0.0 container jobs
   build the pinned CUDA server; macOS arm64 also builds it with the native Metal backend, alongside
   the pinned CPU server and install/catalog smoke step. The Linux pinned CPU job now runs the full
   source installer and checks the installed CLI version, catalog, and server revision. The locally
   installed Platypus binary and model catalog smoke check pass. Hosted CI outcomes and supported GPU
-  execution remain unverified.
-- [x] Run all local verification presets: dev, ASan, UBSan (10/10 CTest tests each) and Python (41 tests).
-  Re-run after setup sample-task and runtime OOM changes: all three CTest presets passed 10/10 and
-  Python passed 41/41. Fake HTTP/process tests verify one reduced-context retry and no replay after
+  execution remain unverified. A tag-triggered release workflow now covers the five distribution
+  targets; it awaits a tagged run on GitHub.
+- [x] Run all local verification presets: dev, ASan, UBSan (10/10 CTest tests each) and Python.
+  All three CTest presets passed 10/10; Python passed 41 benchmark tests and 6 private release/update
+  tests. Fake HTTP/process tests verify one reduced-context retry and no replay after
   partial output. Real-model OOM and setup sample execution remain unverified.
 - [ ] Document remote CI outcomes when supported-host workflows are available.
 - [ ] Human: verify unsupported-by-default installation on five machines, including AMD 6 GB,

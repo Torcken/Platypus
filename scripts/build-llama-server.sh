@@ -115,4 +115,41 @@ cmake -S "${llama_source}" -B "${llama_build}" -G Ninja \
   "${backend_args[@]}"
 cmake --build "${llama_build}" --target llama-server --parallel "${build_jobs}"
 cmake --install "${llama_build}"
+release_target="${PLATYPUS_RELEASE_TARGET:-}"
+cuda_version=""
+if [[ -z "${release_target}" ]]; then
+  case "$(uname -s):${backend}" in
+    Darwin:metal) release_target="macos-arm64-metal" ;;
+    Darwin:cpu) release_target="macos-arm64-cpu" ;;
+    Linux:cpu) release_target="linux-x86_64-cpu" ;;
+    Linux:vulkan) release_target="linux-x86_64-vulkan" ;;
+    Linux:cuda)
+      cuda_version="$(nvcc --version | sed -n 's/.*release \([0-9][0-9]*\)\..*/\1/p' | tail -n 1)"
+      case "${cuda_version}" in
+        12) release_target="linux-x86_64-cuda12" ;;
+        13) release_target="linux-x86_64-cuda13" ;;
+        *) echo "CUDA release target must use toolkit 12 or 13." >&2; exit 2 ;;
+      esac
+      ;;
+    *) echo "Cannot determine a supported release target." >&2; exit 2 ;;
+  esac
+fi
+case "${release_target}" in
+  linux-x86_64-cpu|linux-x86_64-vulkan|linux-x86_64-cuda12|linux-x86_64-cuda13|macos-arm64-cpu|macos-arm64-metal) ;;
+  *) echo "Unsupported PLATYPUS_RELEASE_TARGET: ${release_target}" >&2; exit 2 ;;
+esac
+case "${release_target}:${backend}" in
+  linux-x86_64-cpu:cpu|linux-x86_64-vulkan:vulkan|macos-arm64-cpu:cpu|macos-arm64-metal:metal) ;;
+  linux-x86_64-cuda12:cuda)
+    [[ -n "${cuda_version}" ]] || cuda_version="$(nvcc --version | sed -n 's/.*release \([0-9][0-9]*\)\..*/\1/p' | tail -n 1)"
+    [[ "${cuda_version}" == 12 ]] || { echo "CUDA 12 target requires CUDA 12." >&2; exit 2; }
+    ;;
+  linux-x86_64-cuda13:cuda)
+    [[ -n "${cuda_version}" ]] || cuda_version="$(nvcc --version | sed -n 's/.*release \([0-9][0-9]*\)\..*/\1/p' | tail -n 1)"
+    [[ "${cuda_version}" == 13 ]] || { echo "CUDA 13 target requires CUDA 13." >&2; exit 2; }
+    ;;
+  *) echo "Release target does not match the selected OS/backend." >&2; exit 2 ;;
+esac
+mkdir -p "${prefix}/share/platypus"
+printf '%s\n' "${release_target}" > "${prefix}/share/platypus/install-target"
 echo "Installed pinned llama-server (${llama_commit}) to ${prefix}/bin/llama-server"
