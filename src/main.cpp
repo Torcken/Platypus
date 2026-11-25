@@ -207,10 +207,14 @@ int setup_command(std::filesystem::path &model_path, std::string &profile_path) 
         return 1;
     }
     model_path = directory / (model.id + ".gguf");
+    int previous_percent = -1;
     auto downloaded =
         download_model(model, model_path, [&](std::uint64_t received, std::uint64_t total) {
             const auto percent = total == 0 ? 0 : static_cast<int>(received * 100 / total);
-            std::cerr << "\rDownloading " << model.id << ": " << percent << "%" << std::flush;
+            if (percent != previous_percent) {
+                std::cerr << "\rDownloading " << model.id << ": " << percent << "%" << std::flush;
+                previous_percent = percent;
+            }
         });
     std::cerr << '\n';
     if (!downloaded.is_ok()) {
