@@ -74,7 +74,9 @@ case "${backend}" in
       echo "The Metal llama-server backend is available only on macOS." >&2
       exit 2
     fi
-    backend_args=(-DGGML_METAL=ON)
+    # The pinned Metal source uses std::unique_ptr without directly including <memory>.
+    metal_cxx_flags="${CXXFLAGS:-} -include memory"
+    backend_args=(-DGGML_METAL=ON "-DCMAKE_CXX_FLAGS=${metal_cxx_flags}")
     ;;
   *) echo "PLATYPUS_LLAMA_BACKEND must be auto, cpu, cuda, vulkan, or metal." >&2; exit 2 ;;
 esac

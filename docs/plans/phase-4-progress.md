@@ -13,11 +13,18 @@ Interruptions now attempt restoration as well. See [the review record](review-20
 
 Verification after these fixes: dev, ASan, and UBSan each passed 10/10 CTest tests;
 41 benchmark tests and 9 installer/updater tests passed. Hosted Linux GCC/Clang and sanitizer
-jobs passed. Hosted macOS exposed test timeout assumptions, now hardened locally; the latest
-hosted rerun is pending. Vulkan and pinned-server builds completed, but their smoke checks
-initially expected a longer llama-server revision string than the binary reports; fixed in
-`f15aff6` and awaiting a hosted rerun. Loopback fixture tests required execution outside the
-filesystem/network sandbox.
+jobs passed. Hosted macOS exposed test timeout assumptions, now hardened locally. Loopback
+fixture tests required execution outside the filesystem/network sandbox. Current hosted outcomes
+and follow-up fixes are recorded below.
+
+Hosted run `45708539468` on `673e4fa` passed Linux GCC, Clang, ASan, UBSan, fuzz, and the macOS
+client build, CTest, and Python suites. Remaining failures exposed two CI assumptions: llama-server
+prints its version to stderr, and CUDA binaries cannot be executed on runners without NVIDIA driver
+libraries. CI now checks the embedded pinned revision in the built artifact. The macOS installer
+also exposed a missing `<memory>` include in the pinned Metal source under the Homebrew LLVM toolchain;
+the build script now supplies that header without modifying the pinned checkout. Hosted validation
+of these corrections is pending. Locally, dev CTest passed 10/10, updater tests passed 9/9, shell
+syntax and Python compilation passed.
 
 
 - [x] Resolve Windows v1.0 support before platform work (ADR-025).
